@@ -1,0 +1,19 @@
+Metadata-Version: 2.2
+Name: pipeinsar
+Version: 0.0.1
+Summary: A GUI package for GMTSAR workflow
+Author-email: Badar Munir <m.b.munir@utwente.nl>
+Project-URL: Homepage, https://github.com/mbadarmunir/pipeInSAR
+Project-URL: Issues, https://github.com/mbadarmunir/pipeInSAR/issues
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+
+# pipeInSAR
+
+To run the GUI, Please run following
+import pipeinsar
+pipeinsar.main()
