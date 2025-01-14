@@ -1,7 +1,110 @@
 import tkinter as tk
 from utils.utils import *
 from gmtsar_gui.ts_gmtsar_sbas_full import main
-from tkinter import scrolledtext, ttk
+from tkinter import scrolledtext, ttk, messagebox
+
+def validate_entries(
+    folder1_entry, dem_file_entry, pin_file_entry, folder2_entry, atm_option, 
+    baselines_entry, multilooking_entry, filter_wavelength_entry, 
+    unwrapping_threshold_entry, inc_angle_entry
+):
+    errors = []
+
+    # Check if folders and files exist
+    if not os.path.exists(folder1_entry.get()):
+        errors.append("Input data directory does not exist.")
+    if not os.path.exists(dem_file_entry.get()):
+        errors.append("DEM file does not exist.")
+    if not os.path.exists(pin_file_entry.get()):
+        errors.append("PIN file does not exist.")
+    if not os.path.exists(folder2_entry.get()) and atm_option.get() == "GACOS Atmospheric correction":
+        errors.append("GACOS directory does not exist.")
+
+    # Check for mismatched entries in the textboxes
+    try:
+        baselines = list(map(int, baselines_entry.get().split(',')))
+    except ValueError:
+        errors.append("Baselines entry is not valid.")
+    
+    try:
+        multilooking = list(map(int, multilooking_entry.get().split(',')))
+    except ValueError:
+        errors.append("Multilooking entry is not valid.")
+    
+    try:
+        filter_wavelength = int(filter_wavelength_entry.get())
+    except ValueError:
+        errors.append("Filter wavelength entry is not valid.")
+    
+    try:
+        unwrapping_threshold = float(unwrapping_threshold_entry.get())
+    except ValueError:
+        errors.append("Unwrapping threshold entry is not valid.")
+    
+    try:
+        inc_angle = float(inc_angle_entry.get())
+    except ValueError:
+        errors.append("Incidence angle entry is not valid.")
+
+    return errors
+
+def on_run_button_click(
+    root, 
+    folder1_entry, 
+    sort_order, 
+    dem_file_entry, 
+    pin_file_entry, 
+    project_name_entry,
+    output_folder_entry,
+    mst_entry, 
+    folder2_entry, 
+    processing_option,
+    atm_option,
+    console_text,
+    progress_bar, 
+    baselines_entry, 
+    multilooking_entry, 
+    filter_wavelength_entry, 
+    unwrapping_threshold_entry, 
+    inc_angle_entry
+):
+    errors = validate_entries(
+        folder1_entry, 
+        dem_file_entry, 
+        pin_file_entry, 
+        folder2_entry, 
+        atm_option, 
+        baselines_entry, 
+        multilooking_entry, 
+        filter_wavelength_entry, 
+        unwrapping_threshold_entry, 
+        inc_angle_entry
+    )
+    if errors:
+        messagebox.showerror("Validation Error", "\n".join(errors))
+    else:
+        # Proceed with the current setup
+        run_main(
+            root,
+            folder1_entry,
+            sort_order,
+            folder2_entry,
+            dem_file_entry,
+            pin_file_entry,
+            project_name_entry,
+            output_folder_entry,
+            mst_entry,
+            baselines_entry,
+            multilooking_entry,
+            filter_wavelength_entry,
+            unwrapping_threshold_entry,
+            inc_angle_entry,
+            processing_option,
+            atm_option,
+            console_text,
+            progress_bar,
+        )
+
 
 def run_gui():
     root = tk.Tk()
@@ -235,26 +338,26 @@ def run_gui():
     run_button = tk.Button(
         root,
         text="Run",
-        command=lambda: run_main(
-            root,
-            folder1_entry,
-            sort_order,
-            folder2_entry,
-            dem_file_entry,
-            pin_file_entry,
-            project_name_entry,
-            output_folder_entry,
-            mst_entry,
-            baselines_entry,
-            multilooking_entry,
-            filter_wavelength_entry,
-            unwrapping_threshold_entry,
-            inc_angle_entry,
-            processing_option,
-            atm_option,
-            console_text,
-            progress_bar,
-        ),
+        command=lambda: on_run_button_click(
+                root, 
+                folder1_entry, 
+                sort_order, 
+                dem_file_entry, 
+                pin_file_entry, 
+                project_name_entry,
+                output_folder_entry,
+                mst_entry, 
+                folder2_entry, 
+                processing_option,
+                atm_option,
+                console_text,
+                progress_bar, 
+                baselines_entry, 
+                multilooking_entry, 
+                filter_wavelength_entry, 
+                unwrapping_threshold_entry, 
+                inc_angle_entry
+            ),
     )
     run_button.grid(row=18, column=1, padx=10, pady=20)      
     # # Start the main loop
@@ -283,6 +386,7 @@ def run_main(
 ):
     try:
         in_data_dir = folder1_entry.get()
+
         node = sort_order.get()
         gacos_dir = folder2_entry.get()
         dem_file = dem_file_entry.get()
