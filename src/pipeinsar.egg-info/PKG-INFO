@@ -1,6 +1,6 @@
 Metadata-Version: 2.2
 Name: pipeinsar
-Version: 0.0.1
+Version: 0.0.2
 Summary: A GUI package for GMTSAR workflow
 Author-email: Badar Munir <m.b.munir@utwente.nl>
 Project-URL: Homepage, https://github.com/mbadarmunir/pipeInSAR

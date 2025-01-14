@@ -3,7 +3,6 @@ from utils.utils import *
 from gmtsar_gui.ts_gmtsar_sbas_full import main
 from tkinter import scrolledtext, ttk
 
-
 def run_gui():
     root = tk.Tk()
     root.title("GMTSAR Fully Automated Workflow")
@@ -13,12 +12,12 @@ def run_gui():
     folder1_label.grid(row=0, column=0, padx=10, pady=5)
     folder1_entry = tk.Entry(root, width=50)
     folder1_entry.grid(row=0, column=1, padx=10, pady=5)
-    browse_button2 = tk.Button(
+    browse_button1 = tk.Button(
         root,
         text="Browse",
-        command=lambda: browse_folder(folder1_entry, "last_folder1_dir"),
+        command=lambda: browse_folder(folder1_entry, "in_data_dir"),
     )
-    browse_button2.grid(row=0, column=2, padx=10, pady=5)
+    browse_button1.grid(row=0, column=2, padx=10, pady=5)
 
     # Create a StringVar to store the value of the radio button
     sort_order = tk.StringVar()
@@ -53,22 +52,21 @@ def run_gui():
     folder2_label.grid(row=1, column=0, padx=10, pady=5)
     folder2_entry = tk.Entry(root, width=50, state=tk.DISABLED)
     folder2_entry.grid(row=1, column=1, padx=10, pady=5)
-    browse_button3 = tk.Button(
+    browse_button2 = tk.Button(
         root,
         text="Browse",
-        command=lambda: browse_folder(folder2_entry, "last_folder2_dir"),
+        command=lambda: browse_folder(folder2_entry, "gacos_dir"),
         state=tk.DISABLED,
     )
-    browse_button3.grid(row=1, column=2, padx=10, pady=5)
+    browse_button2.grid(row=1, column=2, padx=10, pady=5)
 
     atm_option.trace_add(
         "write",
-        lambda *args: toggle_gacos_folder(atm_option, folder2_entry, browse_button3),
+        lambda *args: toggle_gacos_folder(atm_option, folder2_entry, browse_button2),
     )
 
     # Start with correct widget state (in case default selection isn't 1)
-    # update_widgets()
-    toggle_gacos_folder(atm_option, folder2_entry, browse_button3)
+    toggle_gacos_folder(atm_option, folder2_entry, browse_button2)
 
     # Create the dem file selection textbox and browse button
     dem_file_label = tk.Label(root, text="Select DEM file:")
@@ -80,7 +78,7 @@ def run_gui():
         root,
         text="Browse",
         command=lambda: browse_file(
-            dem_file_entry, "last_dem_file_dir", [("DEM files", "*.grd")]
+            dem_file_entry, "dem_file", [("DEM files", "*.grd")]
         ),
     )
 
@@ -96,7 +94,7 @@ def run_gui():
         root,
         text="Browse",
         command=lambda: browse_file(
-            pin_file_entry, "last_pin_file_dir", [("pin files", "*.II")]
+            pin_file_entry, "pin_file", [("pin files", "*.II")]
         ),
     )
 
@@ -113,12 +111,12 @@ def run_gui():
     output_folder_label.grid(row=5, column=0, padx=10, pady=5)
     output_folder_entry = tk.Entry(root, width=50)
     output_folder_entry.grid(row=5, column=1, padx=10, pady=5)
-    browse_button4 = tk.Button(
+    browse_button3 = tk.Button(
         root,
         text="Browse",
-        command=lambda: browse_folder(output_folder_entry, "last_output_folder"),
+        command=lambda: browse_folder(output_folder_entry, "output_dir"),
     )
-    browse_button4.grid(row=5, column=2, padx=10, pady=5)
+    browse_button3.grid(row=5, column=2, padx=10, pady=5)
 
     # Custom master image entry textbox
     mst_label = tk.Label(root, text="Custom Master Image (format:yyyymmdd):*")
@@ -185,11 +183,6 @@ def run_gui():
     # Create progress bar
     progress_bar = ttk.Progressbar(root, mode="determinate")
     progress_bar.grid(row=15, column=0, columnspan=5, padx=10, pady=5, sticky="ew")
-    # root.grid_columnconfigure(0, weight=1)
-    # root.grid_columnconfigure(1, weight=1)
-    # root.grid_columnconfigure(2, weight=1)
-    # root.grid_columnconfigure(3, weight=1)
-    # root.grid_columnconfigure(4, weight=1)
 
     # Create the console text area
     console_label = tk.Label(root, text="Console Output:")
@@ -201,13 +194,14 @@ def run_gui():
 
     config = load_config()
 
-    # Load the textboxes with last-used values or defaults
-
-    folder1_entry.insert(0, config.get("last_folder1_dir", ""))
-    dem_file_entry.insert(0, config.get("last_dem_file_dir", ""))
-    pin_file_entry.insert(0, config.get("last_pin_file_dir", ""))
+    # # Load the last-used values or defaults
+    
+    folder1_entry.insert(0, config.get("in_data_dir", ""))
+    sort_order.set(config.get("node", ""))
+    dem_file_entry.insert(0, config.get("dem_file", ""))
+    pin_file_entry.insert(0, config.get("pin_file", ""))
     project_name_entry.insert(0, config.get("project_name", ""))
-    output_folder_entry.insert(0, config.get("last_output_folder", ""))
+    output_folder_entry.insert(0, config.get("output_dir", ""))
 
     if config.get("baselines", ""):
         baselines_entry.insert(0, config.get("baselines", ""))
@@ -226,57 +220,126 @@ def run_gui():
     else:
         unwrapping_threshold_entry.insert(0, "0.01")
     processing_option.set(
-        config.get("last_used_processing_option", processing_options[0])
+        config.get("subswath_option", processing_options[0])
     )
-    atm_option.set(config.get("last_used_atm_option", atm_options[0]))
-    # update_widgets(atm_option, folder2_entry, browse_button3)
-    toggle_gacos_folder(atm_option, folder2_entry, browse_button3)
-    folder2_entry.insert(0, config.get("last_folder2_dir", ""))
+    atm_option.set(config.get("atm_corr_option", ""))    
+    toggle_gacos_folder(atm_option, folder2_entry, browse_button2)
+    
+    folder2_entry.insert(0, config.get("gacos_dir", ""))
     if config.get("inc_angle"):
         inc_angle_entry.insert(0, config.get("inc_angle"))
     else:
-        inc_angle_entry.insert(0, "37.0;")
-
-    # Read all user inputs into appropriate variables
-    in_data_dir = folder1_entry.get()
-    gacos_dir = folder2_entry.get()
-    dem_file = dem_file_entry.get()
-    pin_file = pin_file_entry.get()
-    project_name = project_name_entry.get()
-    output_dir = output_folder_entry.get()
-    mst = mst_entry.get()
-    baselines = baselines_entry.get()
-    multilooking = multilooking_entry.get()
-    filter_wavelength = filter_wavelength_entry.get()
-    unwrapping_threshold = unwrapping_threshold_entry.get()
-    inc_angle = inc_angle_entry.get()
-    subswath_option = processing_option.get()
-    atm_corr_option = atm_option.get()
-
+        inc_angle_entry.insert(0, "37.0")
+    
     # Create the Run button
     run_button = tk.Button(
         root,
         text="Run",
-        command=lambda: main(
-            in_data_dir,
-            gacos_dir,
-            dem_file,
-            pin_file,
-            project_name,
-            output_dir,
-            mst,
-            baselines,
-            multilooking,
-            filter_wavelength,
-            unwrapping_threshold,
-            inc_angle,
-            subswath_option,
-            atm_corr_option,
+        command=lambda: run_main(
+            root,
+            folder1_entry,
+            sort_order,
+            folder2_entry,
+            dem_file_entry,
+            pin_file_entry,
+            project_name_entry,
+            output_folder_entry,
+            mst_entry,
+            baselines_entry,
+            multilooking_entry,
+            filter_wavelength_entry,
+            unwrapping_threshold_entry,
+            inc_angle_entry,
+            processing_option,
+            atm_option,
             console_text,
             progress_bar,
         ),
     )
-    run_button.grid(row=18, column=1, padx=10, pady=20)
-
-    # Start the main loop
+    run_button.grid(row=18, column=1, padx=10, pady=20)      
+    # # Start the main loop
     root.mainloop()
+    
+    
+def run_main(
+    root,
+    folder1_entry,
+    sort_order,
+    folder2_entry,
+    dem_file_entry,
+    pin_file_entry,
+    project_name_entry,
+    output_folder_entry,
+    mst_entry,
+    baselines_entry,
+    multilooking_entry,
+    filter_wavelength_entry,
+    unwrapping_threshold_entry,
+    inc_angle_entry,
+    processing_option,
+    atm_option,
+    console_text,
+    progress_bar,
+):
+    try:
+        in_data_dir = folder1_entry.get()
+        node = sort_order.get()
+        gacos_dir = folder2_entry.get()
+        dem_file = dem_file_entry.get()
+        pin_file = pin_file_entry.get()
+        project_name = project_name_entry.get()
+        output_dir = output_folder_entry.get()
+        mst = mst_entry.get()
+        baselines = baselines_entry.get()
+        parallel_baseline, perpendicular_baseline = map(int, baselines.split(","))
+        multilooking = multilooking_entry.get()
+        rng, az = map(int, multilooking.split(","))
+        filter_wavelength = filter_wavelength_entry.get()
+        unwrapping_threshold = unwrapping_threshold_entry.get()
+        inc_angle = inc_angle_entry.get()
+        subswath_option = processing_option.get()
+        atm_corr_option = atm_option.get()
+
+        config = load_config()
+        config.update({
+            'in_data_dir': in_data_dir,
+            'node': node,
+            'gacos_dir': gacos_dir,
+            'dem_file': dem_file,
+            'pin_file': pin_file,
+            'project_name': project_name,
+            'output_dir': output_dir,
+            'baselines': baselines,
+            'multilooking': multilooking,
+            'filter_wavelength': filter_wavelength,
+            'unwrapping_threshold': unwrapping_threshold,
+            'inc_angle': inc_angle,
+            'subswath_option': subswath_option,
+            'atm_corr_option': atm_corr_option
+        })
+        save_config(config)    
+    except Exception as e:
+        exitGUI(root, e, f"Error reading user inputs: {e}")
+
+    main(
+        root,
+        in_data_dir,
+        node,
+        gacos_dir,
+        dem_file,
+        pin_file,
+        project_name,
+        output_dir,
+        mst,
+        parallel_baseline,
+        perpendicular_baseline,
+        rng,
+        az,
+        filter_wavelength,
+        unwrapping_threshold,
+        inc_angle,
+        subswath_option,
+        atm_corr_option,
+        console_text,
+        progress_bar,
+    )

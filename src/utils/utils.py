@@ -105,16 +105,18 @@ def update_console(console_text, message, track_time=False):
 
 def browse_file(entry_widget, key, file_types):
     """Browse for a file and insert the path into the entry widget."""
-    filepath = filedialog.askopenfilename(filetypes=file_types)
+    initial_dir = os.path.dirname(entry_widget.get()) if os.path.isfile(entry_widget.get()) else None
+    filepath = filedialog.askopenfilename(initialdir=initial_dir, filetypes=file_types)
     if filepath:
         entry_widget.delete(0, "end")
         entry_widget.insert(0, filepath)
-        update_last_dir(key, os.path.dirname(filepath))
+        update_last_dir(key, filepath)
 
 
 def browse_folder(entry_widget, key):
     """Browse for a folder and insert the path into the entry widget."""
-    folder_path = filedialog.askdirectory()
+    initial_dir = entry_widget.get() if os.path.isdir(entry_widget.get()) else None
+    folder_path = filedialog.askdirectory(initialdir=initial_dir)
     if folder_path:
         entry_widget.delete(0, "end")
         entry_widget.insert(0, folder_path)
