@@ -2,3 +2,4 @@ dist/
 .ruff_cache/
 *.sh
 config.json
+config_part.json
