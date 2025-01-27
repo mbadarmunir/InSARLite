@@ -1,5 +1,5 @@
 dist/
 .ruff_cache/
 *.sh
-config.json
-config_part.json
+src/config.json
+src/config_part.json
