@@ -1,5 +1,5 @@
-git rm -r --cached dist/
-git rm --cached .ruff_cache/
-git rm --cached *.sh
-git rm --cached config.json
-git rm --cached config_part.json
+dist/
+.ruff_cache/
+*.sh
+config.json
+config_part.json
