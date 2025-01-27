@@ -1,14 +1,27 @@
 import os
+import subprocess
 import sys
 import json
-import time
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
 
-CONFIG_FILE = "config.json"
+CONFIG_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.json")
+CONFIG_FILE_PART = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config_part.json")
 
+# Function to run commands in parallel
+def execute_command(command):
+    # Execute bash command
+    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    output, error = process.communicate()
+    return {'command': command, 'output': output, 'error': error}
 
+def run_command(command):
+    result = subprocess.run(command, shell=True, capture_output=True, text=True)
+    if result.returncode != 0:
+        update_console(result.stderr)
+    return result.stdout.strip()
+    
 def toggle_gacos_folder(atm_option, folder2_entry, browse_button3):
     """
     Enable or disable folder2_entry and browse_button3 based on the selected atmospheric correction option.
@@ -76,25 +89,16 @@ def log_message(log_file_path, message):
 
 
 # Function to log messages with timing details
-def update_console(console_text, message, track_time=False):
-    global last_true_time
-
+def update_console(console_text, message, log_file_path, track_time=False):
+    
     # Convert message to string or JSON-formatted string if it's a dictionary
     if isinstance(message, dict):
         message = json.dumps(message, indent=4)
     else:
         message = str(message)
 
-    # Track step time if 'track_time' is True
-    if track_time:
-        current_time = time.time()
-        if last_true_time is not None:
-            time_taken = current_time - last_true_time
-            formatted_time_taken = format_time(time_taken)
-            message += f"\nTime taken: {formatted_time_taken}"
-        last_true_time = current_time  # Update last_true_time with current timestamp
-
-    log_message(message)  # This function is assumed to handle actual logging
+    
+    log_message(log_file_path, message)  # This function is assumed to handle actual logging
 
     # Update the console (assuming you have a Tkinter text widget named `console_text`)
     console_text.config(state=tk.NORMAL)
@@ -130,15 +134,59 @@ def load_config():
             return json.load(f)
     return {}
 
+def load_config_part():
+    """Load configuration from JSON file."""
+    if os.path.exists(CONFIG_FILE_PART):
+        with open(CONFIG_FILE_PART, "r") as f:
+            return json.load(f)
+    return {}
 
 def save_config(config):
     """Save configuration to JSON file."""
     with open(CONFIG_FILE, "w") as f:
         json.dump(config, f, indent=4)
 
+def save_config_part(config):
+    """Save/update configuration to JSON file, keeping existing values intact."""
+    if os.path.exists(CONFIG_FILE_PART):
+        with open(CONFIG_FILE_PART, "r") as f:
+            existing_config = json.load(f)
+    else:
+        existing_config = {}
+
+    # Update existing config with new values
+    existing_config.update(config)
+
+    with open(CONFIG_FILE_PART, "w") as f:
+        json.dump(existing_config, f, indent=4)
+    
 
 def update_last_dir(key, path):
     """Update the last opened directory for a specific key."""
     config = load_config()
     config[key] = path
     save_config(config)
+
+############################################################################################################
+def read_file_lines(filename):
+    """Read all lines from a file and return them as a list."""
+    with open(filename, 'r') as f:
+        return f.readlines()
+
+def mkdir(indir):
+    if not os.path.exists(indir):
+        os.mkdir(indir)
+        print(f"New folder created: {indir}")
+
+
+def create_symlink(src, dest):
+    # Check if the symbolic link already exists
+    if not (os.path.islink(dest) and os.path.exists(dest)):        
+        # If the symbolic link doesn't exist, create it
+        try:
+            subprocess.call(['ln', '-s', src, dest])
+            # print(f"Symbolic link created: {dest} -> {src}")
+        except Exception as e:
+            print(f"Failed to create symbolic link: {e}")
+
+            

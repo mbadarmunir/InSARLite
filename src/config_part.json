@@ -1,0 +1,10 @@
+{
+    "in_data_dir": "/home/badar/0_PhD/01_data/01_raw/02_InSAR/02_ilic_test",
+    "node": "Descending",
+    "dem_file": "/home/badar/0_PhD/01_data/01_raw/01_DEM/01_ilic/dem.grd",
+    "pin_file": "/home/badar/0_PhD/01_data/01_raw/06_Other_Sources/01_pinfiles/01_ilic/pins.II",
+    "project_name": "partallthree123",
+    "output_dir": "/home/badar/0_PhD/01_data/02_processed/02_InSAR/01_ilic/ilic3x",
+    "baselines": "150, 300",
+    "subswath_option": "Third subswath only"
+}

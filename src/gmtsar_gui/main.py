@@ -40,7 +40,7 @@ def run_gui():
         text="Step-be-step SBAS",
         variable=gmt_selection,
         value=2,
-        state="disabled",
+        state="normal",
     )
     gmt_option2_rb.pack(anchor="w")
 
