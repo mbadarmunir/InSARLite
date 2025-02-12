@@ -3,3 +3,4 @@ dist/
 *.sh
 src/config.json
 src/config_part.json
+imported_libraries.txt

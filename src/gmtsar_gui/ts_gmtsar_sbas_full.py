@@ -37,8 +37,9 @@ def run_analysis(
     inc_angle,
     subswath_option,
     atm_corr_option,
+    ncores,
     console_text,
-    progress_bar,
+    progress_bar
 ):
     """Function to run the Time Series Analysis using GMTSAR with SBAS."""
     log_file_path = os.path.join(output_dir, "log.txt")
@@ -137,6 +138,24 @@ def run_analysis(
 
     update_console(console_text, "Baselines and data.in file(s) generated ...", log_file_path)
 
+    update_console(console_text, "Generating pairs of interferograms ...", log_file_path)
+    def gen_pairs_thread():
+        gen_pairs(paths, parallel_baseline, perpendicular_baseline, console_text, log_file_path)
+
+    thread_gen_pairs = threading.Thread(target=gen_pairs_thread)
+    thread_gen_pairs.start()
+
+    def update_progress_gen_pairs():
+        while thread_gen_pairs.is_alive() and progress_bar['value'] < 30:
+            progress_bar['value'] += 0.1
+            root.update_idletasks()
+        progress_bar['value'] = 30
+        root.update_idletasks()
+
+    progress_thread_gen_pairs = threading.Thread(target=update_progress_gen_pairs)
+    progress_thread_gen_pairs.start()
+    thread_gen_pairs.join()
+    progress_thread_gen_pairs.join()
     update_console(console_text, "Starting alignment of secondary images w.r.t. master ...", log_file_path)
     def align_thread():        
         align_sec_imgs(paths, mst, console_text, log_file_path)   
@@ -159,31 +178,10 @@ def run_analysis(
 
     update_console(console_text, "Alignment completed...", log_file_path)
 
-
-    update_console(console_text, "Generating pairs of interferograms ...", log_file_path)
-    def gen_pairs_thread():
-        gen_pairs(paths, parallel_baseline, perpendicular_baseline, console_text, log_file_path)
-
-    thread_gen_pairs = threading.Thread(target=gen_pairs_thread)
-    thread_gen_pairs.start()
-
-    def update_progress_gen_pairs():
-        while thread_gen_pairs.is_alive() and progress_bar['value'] < 30:
-            progress_bar['value'] += 0.1
-            root.update_idletasks()
-        progress_bar['value'] = 30
-        root.update_idletasks()
-
-    progress_thread_gen_pairs = threading.Thread(target=update_progress_gen_pairs)
-    progress_thread_gen_pairs.start()
-    thread_gen_pairs.join()
-    progress_thread_gen_pairs.join()
-        
-
     # Perform preparations for generating interferograms and create IFGs
     update_console(console_text, "Generating interferograms ...", log_file_path)
     def ifg_thread():
-        gen_ifgs(paths, mst, filter_wavelength, rng, az)
+        gen_ifgs(paths, mst, filter_wavelength, rng, az, ncores)
     
     thread_ifg = threading.Thread(target=ifg_thread)
     thread_ifg.start()
@@ -228,7 +226,7 @@ def run_analysis(
     
     
     def unwrap_thread():
-        unwrap(paths, unwrapping_threshold, console_text, log_file_path)
+        unwrap(paths, unwrapping_threshold, ncores, console_text, log_file_path)
 
     thread_unwrap = threading.Thread(target=unwrap_thread)
     thread_unwrap.start()
@@ -286,7 +284,7 @@ def run_analysis(
         if gacos_dir and os.path.exists(gacos_dir):
             update_console(console_text, "Performing GACOS correction ...", log_file_path)
             tdir = os.path.join(os.path.dirname(intfdir), 'topo')                        
-            gacos(IFGs, gacos_dir, tdir, inc_angle, intfdir, num_cores=96)            
+            gacos(IFGs, gacos_dir, tdir, inc_angle, intfdir, num_cores=ncores)            
             update_console(console_text, "GACOS correction completed ...", log_file_path)
 
     thread_gacos = threading.Thread(target=gacos_thread)
@@ -345,8 +343,9 @@ def main(
     inc_angle,
     subswath_option,
     atm_corr_option,
+    ncores,
     console_text,
-    progress_bar,
+    progress_bar
 ):
     """Main function to run the Time Series Analysis using GMTSAR with SBAS."""
     analysis_thread = threading.Thread(target=run_analysis, args=(
@@ -368,8 +367,9 @@ def main(
         inc_angle,
         subswath_option,
         atm_corr_option,
+        ncores,
         console_text,
-        progress_bar,
+        progress_bar
     ))
     analysis_thread.start()
 

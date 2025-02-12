@@ -3,7 +3,7 @@ from multiprocessing.pool import ThreadPool
 from utils.utils import execute_command, update_console
 
 
-def unwrap(paths, unwrapping_threshold, console_text, log_file_path):
+def unwrap(paths, unwrapping_threshold, ncores, console_text, log_file_path):
     pmerge = paths.get("pmerge")
     if pmerge and os.path.exists(pmerge):
         IFGs = next(os.walk(pmerge))[1]
@@ -24,7 +24,7 @@ def unwrap(paths, unwrapping_threshold, console_text, log_file_path):
         ]
 
         # Create a thread pool with n threads
-        with ThreadPool(processes=20) as pool:
+        with ThreadPool(processes=ncores) as pool:
             # Execute bash commands in parallel
             pool.map(execute_command, unwrap_commands)
     else:

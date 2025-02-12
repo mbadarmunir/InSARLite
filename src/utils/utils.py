@@ -19,7 +19,7 @@ def execute_command(command):
 def run_command(command):
     result = subprocess.run(command, shell=True, capture_output=True, text=True)
     if result.returncode != 0:
-        update_console(result.stderr)
+        print(result.stderr)
     return result.stdout.strip()
     
 def toggle_gacos_folder(atm_option, folder2_entry, browse_button3):

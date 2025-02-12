@@ -1,10 +1,10 @@
 import os
 import subprocess
 from multiprocessing.pool import ThreadPool
-from utils.utils import execute_command
+from utils.utils import execute_command, update_console
 
 
-def gen_ifgs(paths, mst, filter_wavelength, rng, az):
+def gen_ifgs(paths, mst, filter_wavelength, rng, az, ncores, console_text=None, log_file_path=None):
     for key in ["pF1", "pF2", "pF3"]:
         dir_path = paths.get(key)
         if dir_path and os.path.exists(dir_path):
@@ -36,11 +36,17 @@ def gen_ifgs(paths, mst, filter_wavelength, rng, az):
                     if 'threshold_geocode' in line:
                         line = 'threshold_geocode = 0\n'
                     f.write(line)
-            print(f"Generating interferograms for {key} ...")
+            if console_text and log_file_path:
+                update_console(console_text, f"Generating interferograms for {key} ...", log_file_path)
+            else:
+                print(f"Generating interferograms for {key} ...")
             # Checking if first IFG is generated
             intfdir = os.path.join(dir_path, 'intf_all')
             
-            print('Cleaning up target directory before generating IFGs')
+            if console_text and log_file_path:
+                update_console(console_text, 'Cleaning up target directory before generating IFGs', log_file_path)
+            else:
+                print('Cleaning up target directory before generating IFGs')
 
             if os.path.exists(intfdir):                    
                 ld = os.listdir(intfdir)
@@ -52,7 +58,10 @@ def gen_ifgs(paths, mst, filter_wavelength, rng, az):
                     print('First IFG for {} already generated'.format(os.path.basename(dir_path)))
             else:
                 # Generate IFGs
-                print('Generating first interferogram for {} ...'.format(os.path.basename(dir_path)))
+                if console_text and log_file_path:
+                    update_console(console_text, 'Generating first interferogram for {} ...'.format(os.path.basename(dir_path)), log_file_path)
+                else:
+                    print('Generating first interferogram for {} ...'.format(os.path.basename(dir_path)))
                 subprocess.call('head -1 intf.in>one.in', shell=True)
                 subprocess.call('intf_tops.csh one.in batch_tops.config', shell=True)
 
@@ -60,13 +69,19 @@ def gen_ifgs(paths, mst, filter_wavelength, rng, az):
                 
                 if not fint and not os.path.exists(fint):
                     raise RuntimeError('Interferogram generation failed. Please check the log file for more details.')
-                print("One interferogram for {} generated ".format(os.path.basename(dir_path)))
+                if console_text and log_file_path:
+                    update_console(console_text, "One interferogram for {} generated ".format(os.path.basename(dir_path)), log_file_path)
+                else:
+                    print("One interferogram for {} generated ".format(os.path.basename(dir_path)))
 
             if len(ld) > 1 and os.path.exists(os.path.join(intfdir, next(os.walk(intfdir))[1][-1], 'phase.pdf')):
                 print('All IFGs for {} are already generated'.format(os.path.basename(dir_path)))
 
             else:
-                print(f'Generating IFGs for {dir_path} ...')
+                if console_text and log_file_path:
+                    update_console(console_text, f'Generating IFGs for {dir_path} ...', log_file_path)
+                else:
+                    print(f'Generating IFGs for {dir_path} ...')
                 # Change proc_stage = 2 in batch_tops.config file
                 with open(con, 'r') as f:
                     lines = f.readlines()
@@ -94,6 +109,6 @@ def gen_ifgs(paths, mst, filter_wavelength, rng, az):
                 ]
 
                 # Create a thread pool with a maximum of n threads
-                with ThreadPool(processes=20) as pool:
+                with ThreadPool(processes=ncores) as pool:
                     # Execute bash commands in parallel
                     pool.map(execute_command, bash_commands1)

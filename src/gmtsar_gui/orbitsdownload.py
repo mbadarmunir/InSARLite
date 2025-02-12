@@ -126,6 +126,8 @@ def process_files(user_datadir, proc_dir):
     for d in [d1, d2, d3]:
         if os.path.exists(d):
             os.chdir(d)
+            if os.path.exists('data.in'):
+                os.remove("data.in")
 
             # List all XML files and store in text.dat
             xml_files = [f for f in os.listdir() if f.endswith('.xml')]

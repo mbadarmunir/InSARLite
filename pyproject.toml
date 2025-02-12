@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "pipeinsar"
 version = "0.0.2"
 authors = [
-  { name="Badar Munir", email="m.b.munir@utwente.nl" },
+  { name="Muhammad Badar Munir", email="m.b.munir@utwente.nl" },
 ]
 description = "A GUI package for GMTSAR workflow"
 readme = "README.md"

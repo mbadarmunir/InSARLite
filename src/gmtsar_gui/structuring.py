@@ -132,7 +132,12 @@ def orchestrate_structure_and_copy(output_dir, project_name, node, subswath_opti
     paths = generate_paths(output_dir, project_name, node, subswath_option)
     pref = paths.get("pref")
     ptopo = paths.get("ptopo")
+    pmerge = paths.get("pmerge")
     
+    if pmerge and os.path.exists(pmerge) and os.path.isdir(pmerge):
+        create_symlink(dem_file, os.path.join(pmerge, os.path.basename(dem_file)))
+        shutil.copy(btconfig, pmerge)       
+
     create_symlink(dem_file, os.path.join(ptopo, os.path.basename(dem_file)))
     create_symlink(pin_file, os.path.join(pref, os.path.basename(pin_file)))
     pdata = paths.get("pdata")

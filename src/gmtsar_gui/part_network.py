@@ -1,12 +1,12 @@
 from utils.utils import update_console
 import os
-import shutil
 from gmtsar_gui.structuring import orchestrate_structure_and_copy
 from gmtsar_gui.masterselection import select_mst
 from gmtsar_gui.orbitsdownload import process_files
 from gmtsar_gui.baselines_gen import preprocess
 from gmtsar_gui.pair_generation import gen_pairs
 import threading
+import pickle
 
 def p_start_network(
     root,
@@ -15,8 +15,7 @@ def p_start_network(
     console_text
     ):
     """Function to run the Time Series Analysis using GMTSAR with SBAS."""
-    log_file_path = os.path.join(output_dir, "Part_1_log.txt")
-    # update_console(console_text, f"Starting Time Series Analysis using GMTSAR with SBAS after {atm_corr_option}...", log_file_path)
+    log_file_path = os.path.join(output_dir, "Network_creation.log")    
 
     # Access the batch_tops.config file so that it can be copied to the required directories
     # Read the GMTSAR environment variable and construct the path
@@ -26,18 +25,23 @@ def p_start_network(
     
     btconfig = os.path.join(gmtsar_path, 'gmtsar', 'csh', 'batch_tops.config')
     update_console(console_text, f"Using batch_tops.config at: {btconfig}", log_file_path)
-    parallel_baseline, perpendicular_baseline = map(int, baselines.split(","))
-    
+    parallel_baseline, perpendicular_baseline = map(int, baselines.split(","))    
     paths = None
     structure = None
+    paths_file = os.path.join(output_dir, project_name, "paths.pkl")    
+
     def structuring():
         nonlocal paths, structure
         paths, structure = orchestrate_structure_and_copy(
             output_dir, project_name, node, subswath_option, dem_file, pin_file, in_data_dir, btconfig, console_text, log_file_path
-        )
+        )           
+
     structuring_thread = threading.Thread(target=structuring)
     structuring_thread.start()
     structuring_thread.join()  # Ensure the thread completes and values are assigned
+
+    with open(paths_file, 'wb') as pf:
+        pickle.dump(paths, pf)
 
     progress_bar['value'] = 5
     root.update_idletasks()
@@ -64,6 +68,10 @@ def p_start_network(
         progress_thread_mst.start()
         thread_mst.join()
         progress_thread_mst.join()
+    mst_file = os.path.join(output_dir, project_name, "mst.pkl")
+    with open(mst_file, 'wb') as mf:
+        pickle.dump(mst, mf)
+                
 
     update_console(console_text, f"master: {mst}", log_file_path)
 
@@ -131,6 +139,20 @@ def p_start_network(
     thread_gen_pairs.join()
     progress_thread_gen_pairs.join()
     update_console(console_text, "Generated pairs of interferograms ...", log_file_path)
+
+    for key in ["pF1", "pF2", "pF3"]:
+        dir_path = paths.get(key)                  
+        if dir_path and os.path.exists(dir_path):     
+            ind = os.path.join(dir_path, "intf.in")
+            update_console(
+                console_text, 
+                "If you want to drop some pairs/IFGs, you may want to do it now by going to \n"
+                f"{ind}\n"
+                "and removing rows. \n"
+                "This will skip aligning images that don't make a valid pair", 
+                log_file_path
+            )
+    
 
 # def main(
 #     root,

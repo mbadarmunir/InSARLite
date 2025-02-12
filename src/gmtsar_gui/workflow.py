@@ -7,7 +7,7 @@ from tkinter import scrolledtext, ttk, messagebox, font
 def validate_entries(
     folder1_entry, dem_file_entry, pin_file_entry, folder2_entry, atm_option, 
     baselines_entry, multilooking_entry, filter_wavelength_entry, 
-    unwrapping_threshold_entry, inc_angle_entry
+    unwrapping_threshold_entry, inc_angle_entry, cores_entry
 ):
     errors = []
 
@@ -47,6 +47,11 @@ def validate_entries(
     except ValueError:
         errors.append("Incidence angle entry is not valid.")
 
+    try:
+        int(cores_entry.get())
+    except ValueError:
+        errors.append("No. of cores entry is not valid.")
+
     return errors
 
 def on_run_button_click(
@@ -67,7 +72,8 @@ def on_run_button_click(
     multilooking_entry, 
     filter_wavelength_entry, 
     unwrapping_threshold_entry, 
-    inc_angle_entry
+    inc_angle_entry,
+    cores_entry
 ):
     errors = validate_entries(
         folder1_entry, 
@@ -79,7 +85,8 @@ def on_run_button_click(
         multilooking_entry, 
         filter_wavelength_entry, 
         unwrapping_threshold_entry, 
-        inc_angle_entry
+        inc_angle_entry,
+        cores_entry
     )
     if errors:
         messagebox.showerror("Validation Error", "\n".join(errors))
@@ -102,8 +109,9 @@ def on_run_button_click(
             inc_angle_entry,
             processing_option,
             atm_option,
+            cores_entry,
             console_text,
-            progress_bar,
+            progress_bar
         )
 
 
@@ -329,6 +337,12 @@ def run_gui():
     processing_option_menu = tk.OptionMenu(root, processing_option, *processing_options)
     processing_option_menu.grid(row=13, column=1, padx=10, pady=5)
 
+    # Number of cores entry
+    cores_label = tk.Label(root, text="Number of cores:")
+    cores_label.grid(row=13, column=3, padx=10, pady=5)
+    cores_entry = tk.Entry(root, width=10)
+    cores_entry.grid(row=13, column=4, padx=10, pady=5)
+
     # Create progress bar
     progress_bar = ttk.Progressbar(root, mode="determinate")
     progress_bar.grid(row=15, column=0, columnspan=5, padx=10, pady=5, sticky="ew")
@@ -402,10 +416,13 @@ def run_gui():
                 multilooking_entry, 
                 filter_wavelength_entry, 
                 unwrapping_threshold_entry, 
-                inc_angle_entry
+                inc_angle_entry,
+                cores_entry
             ),
     )
     run_button.grid(row=18, column=1, padx=10, pady=20)      
+    
+    
     # # Start the main loop
     root.mainloop()
     
@@ -427,6 +444,7 @@ def run_main(
     inc_angle_entry,
     processing_option,
     atm_option,
+    cores_entry,
     console_text,
     progress_bar,
 ):
@@ -449,6 +467,7 @@ def run_main(
         inc_angle = inc_angle_entry.get()
         subswath_option = processing_option.get()
         atm_corr_option = atm_option.get()
+        ncores = int(cores_entry.get())
 
         config = load_config()
         config.update({
@@ -465,12 +484,14 @@ def run_main(
             'unwrapping_threshold': unwrapping_threshold,
             'inc_angle': inc_angle,
             'subswath_option': subswath_option,
-            'atm_corr_option': atm_corr_option
+            'atm_corr_option': atm_corr_option,
+            'ncores': ncores
         })
-        save_config(config)    
+        save_config(config)
     except Exception as e:
         exitGUI(root, e, f"Error reading user inputs: {e}")
 
+    # main function call from gmtsar_gui/ts_gmtsar_sbas_full.py
     main(
         root,
         in_data_dir,
@@ -490,6 +511,7 @@ def run_main(
         inc_angle,
         subswath_option,
         atm_corr_option,
+        ncores,
         console_text,
-        progress_bar,
+        progress_bar
     )

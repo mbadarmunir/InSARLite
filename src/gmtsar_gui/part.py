@@ -2,10 +2,16 @@ import tkinter as tk
 from tkinter import font, ttk, scrolledtext
 from utils.utils import load_config_part, browse_folder, browse_file, save_config_part, exitGUI
 from gmtsar_gui.part_network import p_start_network
+from gmtsar_gui.alignment import align_sec_imgs
+from gmtsar_gui.part_ifgs_gen import run_gui_ifg
 import threading
+import os
+import pickle
+import shutil
 
 def run_function(
-    next_button,
+    start_alignment_button,
+    skip_button,
     root,        
     folder1_entry,
     sort_order,
@@ -41,6 +47,9 @@ def run_function(
             'baselines': baselines,            
             'subswath_option': subswath_option            
         })
+        
+        if os.path.exists(os.path.join(output_dir, project_name)):
+            shutil.rmtree(os.path.join(output_dir, project_name))
 
         def task_wrapper():
             p_start_network(
@@ -53,9 +62,10 @@ def run_function(
 
         # Run the long-running task in a separate thread
         def on_task_complete():
-            next_button.config(state=tk.NORMAL)
-            save_config_part(config_part) 
-            
+            start_alignment_button.config(state=tk.NORMAL)
+            skip_button.config(state=tk.DISABLED)
+            save_config_part(config_part)                  
+
         task_thread = threading.Thread(target=task_wrapper)
         task_thread.start()
         
@@ -63,34 +73,47 @@ def run_function(
     except Exception as e:
         exitGUI(root, not e, f"Error reading user inputs: {e}")
 
-def next_function(
-        folder1_entry,
-        sort_order,
-        dem_file_entry,
-        pin_file_entry,
-        project_name_entry,
-        output_folder_entry,
-        mst_entry,
-        baselines_entry,
-        processing_option
+def start_alignment_function(
+            root,
+            progress_bar,
+            console_text,
+            next_button,  
+            project_name_entry,          
+            output_folder_entry            
         ):
-    print("Next button clicked")
+    paths_file = os.path.join(output_folder_entry.get(), project_name_entry.get(), "paths.pkl")
+    mst_file = os.path.join(output_folder_entry.get(), project_name_entry.get(), "mst.pkl")
+    log_file_path = os.path.join(output_folder_entry.get(), project_name_entry.get(), "alignment.log")
 
-    in_data_dir = folder1_entry.get()
-    node = sort_order.get()        
-    dem_file = dem_file_entry.get()
-    pin_file = pin_file_entry.get()
-    project_name = project_name_entry.get()
-    output_dir = output_folder_entry.get()
-    mst = mst_entry.get()
-    baselines = baselines_entry.get()        
-    subswath_option = processing_option.get()    
+    if os.path.exists(paths_file) and os.path.exists(mst_file):
+        with open(paths_file, 'rb') as pf, open(mst_file, 'rb') as mf:
+            paths = pickle.load(pf)
+            mst = pickle.load(mf)
 
-    print(in_data_dir, node, dem_file, pin_file, project_name, output_dir, mst, baselines, subswath_option)
+    def task_wrapper():
+        align_sec_imgs(paths, mst, console_text, log_file_path)
+        root.after(0, on_task_complete)
+
+    # Run the long-running task in a separate thread
+    def on_task_complete():
+        next_button.config(state=tk.NORMAL)
+        progress_bar['value'] = 100
+        root.update_idletasks()
+         
+    
+    progress_bar['value'] = 0
+    root.update_idletasks()
+    task_thread = threading.Thread(target=task_wrapper)
+    task_thread.start()
+
+
+def next_function(root, project_name, output_folder):
+    root.destroy()    
+    run_gui_ifg(project_name, output_folder)    
 
 def run_gui():
     root = tk.Tk()
-    root.title("GMTSAR step-by-step Automated Workflow")
+    root.title("Generate and plot baselines network")
 
     # Configure the grid to be scalable
     for i in range(20):
@@ -236,12 +259,13 @@ def run_gui():
     console_text = scrolledtext.ScrolledText(root, height=10, width=50, state=tk.DISABLED, wrap=tk.WORD)
     console_text.grid(row=10, column=0, columnspan=3, padx=10, pady=5, sticky="ew")
     
-    # Add Run and Next buttons
+    # Add Run, start alignment and Next buttons
     run_button = tk.Button(
         root,
         text="Run",
         command=lambda: run_function(
-            next_button,
+            start_alignment_button,
+            skip_button,
             root,            
             folder1_entry,
             sort_order,
@@ -258,24 +282,35 @@ def run_gui():
     )
     run_button.grid(row=11, column=0, padx=10, pady=5, sticky="ew")
 
-    next_button = tk.Button(
+    start_alignment_button = tk.Button(
         root,
-        text="Next",
-        command=lambda: next_function(
-            folder1_entry,
-            sort_order,
-            dem_file_entry,
-            pin_file_entry,
-            project_name_entry,
-            output_folder_entry,
-            mst_entry,
-            baselines_entry,
-            processing_option
+        text="Start Alignment",
+        command=lambda: start_alignment_function(
+            root,
+            progress_bar,
+            console_text,
+            next_button,  
+            project_name_entry,          
+            output_folder_entry
         ),
         state=tk.DISABLED
     )
-    next_button.grid(row=11, column=1, padx=10, pady=5, sticky="ew")
+    start_alignment_button.grid(row=11, column=1, padx=10, pady=5, sticky="ew")
 
+    next_button = tk.Button(
+        root,
+        text="Next",
+        command=lambda: next_function(root, project_name_entry.get(), output_folder_entry.get()),
+        state=tk.DISABLED
+    )
+    next_button.grid(row=11, column=2, padx=10, pady=5, sticky="ew")
+
+    skip_button = tk.Button(
+        root,
+        text="Skip",
+        command=lambda: next_function(root, project_name_entry.get(), output_folder_entry.get())
+    )
+    skip_button.grid(row=11, column=3, padx=10, pady=5, sticky="ew")
 
     config = load_config_part()
 

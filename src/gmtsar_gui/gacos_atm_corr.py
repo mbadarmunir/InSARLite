@@ -132,7 +132,7 @@ def gacos_worker(args):
     except Exception as e:
         print(f"Error processing interferogram {dir}: {e}")
 
-def gacos(interferogram_dirs, GACOS_dir, topo_dir, incidence, intf_dir, num_cores=95):
+def gacos(interferogram_dirs, GACOS_dir, topo_dir, incidence, intf_dir, num_cores):
     
     args_list = [
         (GACOS_dir, topo_dir, incidence, intf_dir, dir)
