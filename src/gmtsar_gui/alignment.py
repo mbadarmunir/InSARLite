@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 
-def align_sec_imgs(paths, mst, console_text, log_file_path):
+def align_sec_imgs(paths, mst, console_text=None, log_file_path=None):
     lock = threading.Lock()
 
     def process_key(key):
@@ -27,7 +27,10 @@ def align_sec_imgs(paths, mst, console_text, log_file_path):
                 remove_unconnected_images(ind, dind)
                 
                 with lock:
-                    update_console(console_text, f"Starting alignment for {key}...", log_file_path)
+                    if console_text and log_file_path:
+                        update_console(console_text, f"Starting alignment for {key}...", log_file_path)
+                    else:
+                        print(f"Starting alignment for {key}...")                    
 
                 if not any(f.endswith('.SLC') for f in os.listdir('.')):
                     subprocess.call('preproc_batch_tops.csh data.in dem.grd 2', shell=True, cwd=praw)

@@ -4,6 +4,7 @@ from gmtsar_gui.unwrapping import unwrap
 from gmtsar_gui.part_gacos import run_gui_gacos
 from gmtsar_gui.mean_corr import create_mean_grd
 from gmtsar_gui.part_SBAS import run_gui_sb
+from gmtsar_gui.masking import create_mask
 import threading
 import os
 import pickle
@@ -14,11 +15,13 @@ def run_function(
     root,
     project_name, 
     output_folder,
-    unwrapping_threshold,    
+    coherence_threshold,    
     ncores,
     progress_bar,
     console_text
-    ):            
+    ):     
+
+    masking_threshold, unwrapping_threshold = map(float, coherence_threshold.split(","))       
     skip_button.config(state=tk.DISABLED)
     paths_file = os.path.join(output_folder, project_name, "paths.pkl")    
     log_file_path = os.path.join(output_folder, project_name, "unwrapping.log")
@@ -28,7 +31,7 @@ def run_function(
             paths = pickle.load(pf)
             
     def task_wrapper():
-        unwrap(paths, unwrapping_threshold, ncores, console_text, log_file_path)
+        
         pmerge = paths.get("pmerge")
         if pmerge and os.path.exists(pmerge):            
             intfdir = pmerge        
@@ -39,6 +42,8 @@ def run_function(
                     intfdir = os.path.join(dir_path, "intf_all")                               
                     break
         create_mean_grd(intfdir)
+        create_mask(intfdir, masking_threshold, mask="mask_def.grd")
+        unwrap(paths, unwrapping_threshold, ncores, console_text, log_file_path)
         root.after(0, on_task_complete)
 
     # Run the long-running task in a separate thread
@@ -121,13 +126,15 @@ def run_gui_uwp(project_name, output_folder):
     root.bind_all("<Control-KP_Subtract>", on_key_press)  # For handling Ctrl + '-' on numeric keypad
 
     # Create the required input fields
-    # Unwrapping Threshold entry
-    unwrapping_threshold_label = tk.Label(
-        root, text="Unwrapping Threshold (format: float):"
+    # Coherence Threshold entry
+    coherence_thresholds_label = tk.Label(
+        root, text="Coherence Thresholds (format: masking, unwrapping):"
     )
-    unwrapping_threshold_label.grid(row=0, column=0, padx=10, pady=5)
-    unwrapping_threshold_entry = tk.Entry(root, width=50)
-    unwrapping_threshold_entry.grid(row=0, column=1, padx=10, pady=5)
+    coherence_thresholds_label.grid(row=0, column=0, padx=10, pady=5)
+    coherence_thresholds_entry = tk.Entry(root, width=50)
+    coherence_thresholds_entry.grid(row=0, column=1, padx=10, pady=5)
+    coherence_thresholds_label_e = tk.Label(root, text="(e.g. 0, 0.01) where 0 for masking means no masking")
+    coherence_thresholds_label_e.grid(row=0, column=2, pady=5)
 
     # Number of cores entry
     cores_label = tk.Label(root, text="Number of cores:")
@@ -153,7 +160,7 @@ def run_gui_uwp(project_name, output_folder):
             root,
             project_name, 
             output_folder,
-            unwrapping_threshold_entry.get(), 
+            coherence_thresholds_entry.get(), 
             cores_entry.get(),   
             progress_bar,
             console_text
@@ -192,7 +199,7 @@ def run_gui_uwp(project_name, output_folder):
     skip_button.grid(row=4, column=3, padx=10, pady=5, sticky="ew")
     
     # Load the defaults
-    unwrapping_threshold_entry.insert(0, "0.01")    
+    coherence_thresholds_entry.insert(0, "0, 0.01")    
 
 
     root.mainloop()

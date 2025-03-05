@@ -89,23 +89,26 @@ def log_message(log_file_path, message):
 
 
 # Function to log messages with timing details
-def update_console(console_text, message, log_file_path, track_time=False):
-    
+def update_console(console_text=None, message="", log_file_path=None):
     # Convert message to string or JSON-formatted string if it's a dictionary
     if isinstance(message, dict):
         message = json.dumps(message, indent=4)
     else:
         message = str(message)
 
-    
-    log_message(log_file_path, message)  # This function is assumed to handle actual logging
+    # Log the message if log_file_path is provided
+    if log_file_path:
+        log_message(log_file_path, message)
 
-    # Update the console (assuming you have a Tkinter text widget named `console_text`)
-    console_text.config(state=tk.NORMAL)
-    console_text.insert(tk.END, message + "\n")
-    console_text.config(state=tk.DISABLED)
-    console_text.see(tk.END)
-
+    # Update the console if console_text is provided
+    if console_text:
+        console_text.config(state=tk.NORMAL)
+        console_text.insert(tk.END, message + "\n")
+        console_text.config(state=tk.DISABLED)
+        console_text.see(tk.END)
+    else:
+        # If no console_text is provided, print the message
+        print(message)
 
 def browse_file(entry_widget, key, file_types):
     """Browse for a file and insert the path into the entry widget."""
@@ -188,5 +191,9 @@ def create_symlink(src, dest):
             # print(f"Symbolic link created: {dest} -> {src}")
         except Exception as e:
             print(f"Failed to create symbolic link: {e}")
+
+def rm_symlink(file):
+    if os.path.islink(file):
+        os.unlink(file)
 
             

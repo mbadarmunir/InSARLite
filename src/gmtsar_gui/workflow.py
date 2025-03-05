@@ -7,7 +7,7 @@ from tkinter import scrolledtext, ttk, messagebox, font
 def validate_entries(
     folder1_entry, dem_file_entry, pin_file_entry, folder2_entry, atm_option, 
     baselines_entry, multilooking_entry, filter_wavelength_entry, 
-    unwrapping_threshold_entry, inc_angle_entry, cores_entry
+    coherence_thresholds_entry, inc_angle_entry, cores_entry
 ):
     errors = []
 
@@ -38,9 +38,9 @@ def validate_entries(
         errors.append("Filter wavelength entry is not valid.")
     
     try:
-        float(unwrapping_threshold_entry.get())
+        list(map(float, coherence_thresholds_entry.get().split(',')))
     except ValueError:
-        errors.append("Unwrapping threshold entry is not valid.")
+        errors.append("Coherence thresholds entry is not valid.")
     
     try:
         float(inc_angle_entry.get())
@@ -71,7 +71,7 @@ def on_run_button_click(
     baselines_entry, 
     multilooking_entry, 
     filter_wavelength_entry, 
-    unwrapping_threshold_entry, 
+    coherence_thresholds_entry, 
     inc_angle_entry,
     cores_entry
 ):
@@ -84,7 +84,7 @@ def on_run_button_click(
         baselines_entry, 
         multilooking_entry, 
         filter_wavelength_entry, 
-        unwrapping_threshold_entry, 
+        coherence_thresholds_entry, 
         inc_angle_entry,
         cores_entry
     )
@@ -105,7 +105,7 @@ def on_run_button_click(
             baselines_entry,
             multilooking_entry,
             filter_wavelength_entry,
-            unwrapping_threshold_entry,
+            coherence_thresholds_entry,
             inc_angle_entry,
             processing_option,
             atm_option,
@@ -303,13 +303,15 @@ def run_gui():
     filter_wavelength_entry = tk.Entry(root, width=50)
     filter_wavelength_entry.grid(row=9, column=1, padx=10, pady=5)
 
-    # Unwrapping Threshold entry
-    unwrapping_threshold_label = tk.Label(
-        root, text="Unwrapping Threshold (format: float):"
+    # Coherence Threshold entry
+    coherence_thresholds_label = tk.Label(
+        root, text="Coherence Thresholds (format: masking, unwrapping):"
     )
-    unwrapping_threshold_label.grid(row=11, column=0, padx=10, pady=5)
-    unwrapping_threshold_entry = tk.Entry(root, width=50)
-    unwrapping_threshold_entry.grid(row=11, column=1, padx=10, pady=5)
+    coherence_thresholds_label.grid(row=11, column=0, padx=10, pady=5)
+    coherence_thresholds_entry = tk.Entry(root, width=50)
+    coherence_thresholds_entry.grid(row=11, column=1, padx=10, pady=5)
+    coherence_thresholds_label_e = tk.Label(root, text="(e.g. 0, 0.01) where 0 for masking means no masking")
+    coherence_thresholds_label_e.grid(row=11, column=2, pady=5)
 
     # Incidence angle entry
     inc_angle_label = tk.Label(root, text="Incidence Angle (format: float):")
@@ -360,7 +362,8 @@ def run_gui():
     # # Load the last-used values or defaults
     
     folder1_entry.insert(0, config.get("in_data_dir", ""))
-    sort_order.set(config.get("node", ""))
+    if config.get("node"):
+        sort_order.set(config.get("node", ""))
     dem_file_entry.insert(0, config.get("dem_file", ""))
     pin_file_entry.insert(0, config.get("pin_file", ""))
     project_name_entry.insert(0, config.get("project_name", ""))
@@ -378,14 +381,17 @@ def run_gui():
         filter_wavelength_entry.insert(0, config.get("filter_wavelength", ""))
     else:
         filter_wavelength_entry.insert(0, "200")
-    if config.get("unwrapping_threshold", ""):
-        unwrapping_threshold_entry.insert(0, config.get("unwrapping_threshold", ""))
+    if config.get("coherence_thresholds", ""):
+        coherence_thresholds_entry.insert(0, config.get("coherence_thresholds", ""))
     else:
-        unwrapping_threshold_entry.insert(0, "0.01")
+        coherence_thresholds_entry.insert(0, "0, 0.01")
     processing_option.set(
         config.get("subswath_option", processing_options[0])
     )
-    atm_option.set(config.get("atm_corr_option", ""))    
+    if not config.get("atm_corr_option"):
+        atm_option.set(atm_options[0])  # Set the initial value
+    else:
+        atm_option.set(config.get("atm_corr_option", ""))    # Set the value from previous run if present
     toggle_gacos_folder(atm_option, folder2_entry, browse_button2)
     
     folder2_entry.insert(0, config.get("gacos_dir", ""))
@@ -415,7 +421,7 @@ def run_gui():
                 baselines_entry, 
                 multilooking_entry, 
                 filter_wavelength_entry, 
-                unwrapping_threshold_entry, 
+                coherence_thresholds_entry, 
                 inc_angle_entry,
                 cores_entry
             ),
@@ -440,7 +446,7 @@ def run_main(
     baselines_entry,
     multilooking_entry,
     filter_wavelength_entry,
-    unwrapping_threshold_entry,
+    coherence_thresholds_entry,
     inc_angle_entry,
     processing_option,
     atm_option,
@@ -463,7 +469,9 @@ def run_main(
         multilooking = multilooking_entry.get()
         rng, az = map(int, multilooking.split(","))
         filter_wavelength = filter_wavelength_entry.get()
-        unwrapping_threshold = unwrapping_threshold_entry.get()
+        coherence_thresholds = coherence_thresholds_entry.get()
+        masking_threshold = float(coherence_thresholds.split(",")[0])
+        unwrapping_threshold = float(coherence_thresholds.split(",")[1])
         inc_angle = inc_angle_entry.get()
         subswath_option = processing_option.get()
         atm_corr_option = atm_option.get()
@@ -481,7 +489,7 @@ def run_main(
             'baselines': baselines,
             'multilooking': multilooking,
             'filter_wavelength': filter_wavelength,
-            'unwrapping_threshold': unwrapping_threshold,
+            'coherence_thresholds': coherence_thresholds,
             'inc_angle': inc_angle,
             'subswath_option': subswath_option,
             'atm_corr_option': atm_corr_option,
@@ -507,6 +515,7 @@ def run_main(
         rng,
         az,
         filter_wavelength,
+        masking_threshold,
         unwrapping_threshold,
         inc_angle,
         subswath_option,

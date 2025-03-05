@@ -19,6 +19,7 @@ def unwrap(paths, unwrapping_threshold, ncores, console_text, log_file_path):
     if os.path.exists(os.path.join(IFGs[0], 'phasefilt.grd')) and not os.path.exists(os.path.join(IFGs[0], 'unwrap.grd')):
             
         update_console(console_text, "Starting unwrapping ...", log_file_path)
+        print("Starting unwrapping...")
         unwrap_commands = [
             f"cd {i} && snaphu_interp.csh {unwrapping_threshold} 0 && cd .." for i in IFGs
         ]
