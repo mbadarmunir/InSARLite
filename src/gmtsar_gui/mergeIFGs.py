@@ -1,6 +1,8 @@
 import os
+import sys
 import shutil
 import subprocess
+import pickle
 from utils.utils import update_console, run_command
 from concurrent.futures import ThreadPoolExecutor
 
@@ -19,6 +21,7 @@ def update_prm(file, param, value):
 # Functions to create merge list for merging interferograms
 def get_merge_text(intf_path, suffix):
     lines = next(os.walk(intf_path))[1]
+    lines.sort()
     merge_texts = []
     for line in lines:
         line = line.strip()
@@ -36,6 +39,10 @@ def create_merge(dir_path):
     txt1 = get_merge_text(f1intf, "F1") if os.path.exists(f1intf) else []
     txt2 = get_merge_text(f2intf, "F2") if os.path.exists(f2intf) else []
     txt3 = get_merge_text(f3intf, "F3") if os.path.exists(f3intf) else []
+
+    txt1.sort()
+    txt2.sort()
+    txt3.sort()
 
     max_len = max(len(txt1), len(txt2), len(txt3))
 
@@ -59,107 +66,35 @@ def get_first_two_files(path):
     except IndexError:
         return None, None, None
 
-def process_line(pmerge, line):
-    line = line.strip()
-    dir_name = line.split(',')[0].split(':')[0].split('/')[-2]
-    os.mkdir(dir_name)
-    os.chdir(dir_name)
-    
-    with open("tmp.filelist", 'w') as tmpf:
-        for entry in line.split(','):
-            tmpf.write(f"../{entry}\n")
-    
-    with open("tmp", 'w') as outf:
-        with open("tmp.filelist", 'r') as tmpf:
-            for l in tmpf:
-                # mm, rest = l.strip().split(',', 1)
-                pth, f1, f2 = l.split(':')
-                mm = os.path.join(pth, f1)
-                shutil.copy(mm, os.path.join(pmerge, dir_name, "supermaster.PRM"))
-                rshift = run_command(f"grep rshift {pth}{f1} | tail -1 | awk '{{print $3}}'")
-                update_prm(os.path.join(pmerge, dir_name, "supermaster.PRM"), "rshift", rshift)
-                
-                fs1 = run_command("grep first_sample supermaster.PRM | awk '{print $3}'")
-                fs2 = run_command(f"grep first_sample {pth}{f1} | awk '{{print $3}}'")
-                if int(fs2) > int(fs1):
-                    update_prm(os.path.join(pth, "supermaster.PRM"), "first_sample", fs2)
-                shutil.copy(os.path.join(pmerge, dir_name, "supermaster.PRM"), pth)
-                outf.write(f"{pth}:supermaster.PRM:{f2}\n")
-    
-    for filename in ["trans.dat", "raln.grd", "ralt.grd", "landmask_ra.grd", "dem.grd", "batch_tops.config"]:
-        if os.path.exists(f"../{filename}") and not os.path.exists(filename):
-            os.symlink(f"../{filename}", filename)
-    
-    run_command(f"merge_unwrap_geocode_tops.csh tmp.filelist batch_tops.config")
-    
-    for filename in ["trans.dat", "landmask_ra.grd", "raln.grd", "ralt.grd", "dem.grd", "batch_tops.config"]:
-        if not os.path.exists(f"../{filename}") and os.path.exists(filename):
-            shutil.move(filename, f"../{filename}")
-            os.symlink(f"../{filename}", filename)
-            
-            os.chdir(pmerge)
-
 def merge_thread(pmerge, ncores, console_text, log_file_path):        
     if pmerge and os.path.exists(pmerge):        
         update_console(console_text, "Merging interferograms ...", log_file_path)
+        update_console(
+            console_text, 
+            f"The current release will ignore defined {ncores} cores and utilize all available cores for merging", 
+            log_file_path
+        )
         os.chdir(pmerge)
-        dir_path = '..'
-        # print("Starting interferogram merging ...1")
-        # print(next(os.walk('.')))
+        dir_path = '..'        
+        mst_file = "../../mst.pkl"
+        if os.path.exists(mst_file):
+            with open(mst_file, 'rb') as mf:            
+                mst = pickle.load(mf)
+        else:
+            sys.exit("Master not found")
         if not next(os.walk('.'))[1]:                
-            with open('merge_list', 'w') as out:
-                for i, line in enumerate(create_merge(dir_path)):
+            with open('merge_list', 'w') as out:                
+                for line in create_merge(dir_path):
                     out.write(line + '\n')
-                    if i > 4:
-                        break
-            # subprocess.call('merge_batch.csh merge_list batch_tops.config', shell=True)
+            with open('merge_list', 'r') as f:
+                lines = f.readlines()
+            lines.insert(0, lines.pop(lines.index(list(filter(lambda x: mst in x.split(',')[0].split(':')[1], lines))[0])))
+            with open('merge_list', 'w') as f:
+                for line in lines:
+                    f.write(line)
+            if os.path.exists('batch_tops.config'):
+                os.remove('batch_tops.config')
+                shutil.copy(f"{dir_path}/F2/batch_tops.config", 'batch_tops.config')
             subprocess.call('merge_batch_parallel.sh merge_list batch_tops.config', shell=True)
-            # with open('merge_list', 'r') as f:
-            #     lines = f.readlines()
             
-            # print("Starting interferogram merging ...2")
-            # lines = []
-            # [lines.append(line) for line in create_merge(dir_path)]
-            # # with ThreadPoolExecutor(max_workers=ncores) as executor:
-            # #     executor.map(lambda line: process_line(pmerge, line), lines)
-            # for line in lines:
-            #     print(line)
-            #     line = line.strip()
-            #     dir_name = line.split(',')[0].split(':')[0].split('/')[-2]
-            #     os.mkdir(dir_name)
-            #     os.chdir(dir_name)
-                
-            #     with open("tmp.filelist", 'w') as tmpf:
-            #         for entry in line.split(','):
-            #             tmpf.write(f"../{entry}\n")
-                
-            #     with open("tmp", 'w') as outf:
-            #         with open("tmp.filelist", 'r') as tmpf:
-            #             for l in tmpf:
-            #                 # mm, rest = l.strip().split(',', 1)
-            #                 pth, f1, f2 = l.split(':')
-            #                 mm = os.path.join(pth, f1)
-            #                 shutil.copy(mm, os.path.join(pmerge, dir_name, "supermaster.PRM"))
-            #                 rshift = run_command(f"grep rshift {pth}{f1} | tail -1 | awk '{{print $3}}'")
-            #                 update_prm(os.path.join(pmerge, dir_name, "supermaster.PRM"), "rshift", rshift)
-                            
-            #                 fs1 = run_command("grep first_sample supermaster.PRM | awk '{print $3}'")
-            #                 fs2 = run_command(f"grep first_sample {pth}{f1} | awk '{{print $3}}'")
-            #                 if int(fs2) > int(fs1):
-            #                     update_prm(os.path.join(pth, "supermaster.PRM"), "first_sample", fs2)
-            #                 shutil.copy(os.path.join(pmerge, dir_name, "supermaster.PRM"), pth)
-            #                 outf.write(f"{pth}:supermaster.PRM:{f2}\n")
-                
-            #     for filename in ["trans.dat", "raln.grd", "ralt.grd", "landmask_ra.grd", "dem.grd", "batch_tops.config"]:
-            #         if os.path.exists(f"../{filename}") and not os.path.exists(filename):
-            #             os.symlink(f"../{filename}", filename)
-                
-            #     run_command(f"merge_unwrap_geocode_tops.csh tmp.filelist batch_tops.config")
-                
-            #     for filename in ["trans.dat", "landmask_ra.grd", "raln.grd", "ralt.grd", "dem.grd", "batch_tops.config"]:
-            #         if not os.path.exists(f"../{filename}") and os.path.exists(filename):
-            #             shutil.move(filename, f"../{filename}")
-            #             os.symlink(f"../{filename}", filename)
-                        
-            #             os.chdir(pmerge)
         update_console(console_text, "Interferograms merged ...", log_file_path)

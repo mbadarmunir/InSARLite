@@ -38,7 +38,7 @@ def run_function(
         root.update_idletasks()
         pmerge = paths.get("pmerge")
         if pmerge and os.path.exists(pmerge):
-            merge_thread(pmerge, console_text, log_file_path)
+            merge_thread(pmerge, ncores, console_text, log_file_path)
         root.after(0, on_task_complete)
 
     # Run the long-running task in a separate thread
