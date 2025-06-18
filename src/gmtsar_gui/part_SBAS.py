@@ -92,7 +92,11 @@ def run_gui_sb(project_name, output_folder):
                 "or the (simple) unwrapped interferograms otherwise.\n"
                 "The output will be a line of sight velocity file and a time series of displacements.\n"
                 "The arguments for this step that are not asked from user are\n"
-                "automatically prepared/searched/calculated from the metadata of input images or already available products.")
+                "automatically prepared/searched/calculated from the metadata of input images or already available products.\n"
+                "Actual sbas or sbas_parallel command is:\n"
+                "--------------------------------------------------------\n"
+                "sbas intf.tab scene.tab N S xdim ydim [-atm ni] [-smooth sf]\n"
+                "[-wavelength wl] [-incidence inc] [-range -rng] [-rms] [-dem]")
 
     # Configure the grid to be scalable
     for i in range(20):
@@ -232,11 +236,11 @@ def run_gui_sb(project_name, output_folder):
          "Make sure GNU Parallel is installed and available in your PATH if you use this option."
     )    
 
-    sbas_label = tk.Label(
-        root, text="sbas intf.tab scene.tab N S xdim ydim [-atm ni] [-smooth sf]"
-                "[-wavelength wl] [-incidence inc] [-range -rng] [-rms] [-dem]"
-    )
-    sbas_label.grid(row=4, column=0, columnspan=6, padx=10, pady=5, sticky="w")
+    # sbas_label = tk.Label(
+    #     root, text="sbas intf.tab scene.tab N S xdim ydim [-atm ni] [-smooth sf]"
+    #             "[-wavelength wl] [-incidence inc] [-range -rng] [-rms] [-dem]"
+    # )
+    # sbas_label.grid(row=4, column=0, columnspan=6, padx=10, pady=5, sticky="w")
 
     progress_bar = ttk.Progressbar(root, mode="determinate")
     progress_bar.grid(row=5, column=0, columnspan=3, padx=10, pady=5, sticky="ew")
@@ -299,6 +303,7 @@ def run_gui_sb(project_name, output_folder):
         "It is usable only if sbas parallel algorithm is used.\n"
         "It dynamically sets Environment Variable OMP_NUM_THREADS value equal to the user specified value.\n"
         "Users are advised to read more about OpenMP to learn about the implementation of parallelization here."
+        
     )
 
     add_tooltip(
