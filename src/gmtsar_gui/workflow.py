@@ -1,6 +1,6 @@
 import tkinter as tk
 import os
-from utils.utils import exitGUI, toggle_gacos_folder, load_config, save_config, browse_folder, browse_file
+from utils.utils import exitGUI, toggle_gacos_folder, load_config, save_config, browse_folder, browse_file, add_tooltip
 from gmtsar_gui.ts_gmtsar_sbas_full import main
 from tkinter import scrolledtext, ttk, messagebox, font
 
@@ -73,7 +73,12 @@ def on_run_button_click(
     filter_wavelength_entry, 
     coherence_thresholds_entry, 
     inc_angle_entry,
-    cores_entry
+    cores_entry,
+    sbas,
+    atm,
+    rms,
+    dem,
+    smooth
 ):
     errors = validate_entries(
         folder1_entry, 
@@ -110,6 +115,11 @@ def on_run_button_click(
             processing_option,
             atm_option,
             cores_entry,
+            sbas,
+            atm,
+            rms,
+            dem,
+            smooth,
             console_text,
             progress_bar
         )
@@ -194,8 +204,7 @@ def run_gui():
     # List of processing options
     atm_options = [
         "No atmospheric correction",
-        "GACOS Atmospheric correction",
-        "SBAS Atmospheric correction",
+        "GACOS Atmospheric correction",        
     ]
 
     # Dropdown menu using OptionMenu
@@ -345,6 +354,75 @@ def run_gui():
     cores_entry = tk.Entry(root, width=10)
     cores_entry.grid(row=13, column=4, padx=10, pady=5)
 
+    # Native sbas atmospheric correction and related controls in a single horizontal frame
+    sbas_args_frame = tk.Frame(root)
+    sbas_args_frame.grid(row=14, column=0, columnspan=6, padx=10, pady=5, sticky="w")
+
+    # SBAS Arguments label
+    sb_args_label = tk.Label(sbas_args_frame, text="SBAS Arguments:")
+    sb_args_label.pack(side=tk.LEFT, padx=(0, 10))
+
+    atm_var = tk.BooleanVar(value=False)
+    rms_var = tk.BooleanVar(value=True)
+    dem_var = tk.BooleanVar(value=True)
+
+    atm_checkbox = tk.Checkbutton(sbas_args_frame, text="-atm", variable=atm_var)
+    atm_checkbox.pack(side=tk.LEFT, padx=(0, 10))
+    add_tooltip(atm_checkbox, "Check to apply native SBAS atmospheric correction (-atm).")
+
+    rms_checkbox = tk.Checkbutton(sbas_args_frame, text="-rms", variable=rms_var)
+    rms_checkbox.pack(side=tk.LEFT, padx=(0, 10))
+    add_tooltip(rms_checkbox, "Check to calculate RMS of residuals (-rms).")
+
+    dem_checkbox = tk.Checkbutton(sbas_args_frame, text="-dem", variable=dem_var)
+    dem_checkbox.pack(side=tk.LEFT, padx=(0, 10))
+    add_tooltip(dem_checkbox, "Check to generate DEM residual error file in SB inversion (-dem).")
+
+    # Smoothing factor label and entry
+    smooth_var_label = tk.Label(sbas_args_frame, text="Smoothing factor:")
+    smooth_var_label.pack(side=tk.LEFT, padx=(0, 5))
+    smooth_var_entry = tk.Entry(sbas_args_frame, width=10)
+    smooth_var_entry.pack(side=tk.LEFT, padx=(0, 10))
+    smooth_var_entry.insert(0, "5.0")  # Default value for smoothing factor
+    add_tooltip(
+        smooth_var_entry, 
+        "Enter the smoothing factor for the SBAS inversion.\n"
+        "Default is 5.0, but you can adjust it based on your data."
+    )
+
+    # SBAS mode selection dropdown
+    sbas_mode_label = tk.Label(sbas_args_frame, text="SBAS Mode:")
+    sbas_mode_label.pack(side=tk.LEFT, padx=(0, 5))
+    sbas_mode_var = tk.StringVar(value="SBAS")
+    sbas_mode_dropdown = ttk.Combobox(
+        sbas_args_frame,
+        textvariable=sbas_mode_var,
+        values=["SBAS", "SBAS Parallel"],
+        state="readonly",
+        width=20
+    )
+    sbas_mode_dropdown.pack(side=tk.LEFT, padx=(0, 10))
+
+    add_tooltip(
+        sbas_mode_dropdown,
+        "Choose 'SBAS' for standard processing or 'SBAS Parallel' to use multi-core processing.\n"
+         "The 'SBAS Parallel' uses GNU Parallel for implementing parallelization.\n"
+         "Make sure GNU Parallel is installed and available in your PATH if you use this option."
+    )
+    if sbas_mode_var.get() == "SBAS Parallel":
+        sbas= "sbas_parallel"
+    else:
+        sbas = "sbas"    
+    
+    os.environ["OMP_NUM_THREADS"] = cores_entry.get() if cores_entry.get() else "1"
+
+
+    # sbas_label = tk.Label(
+    #     root, text="sbas intf.tab scene.tab N S xdim ydim [-atm ni] [-smooth sf]"
+    #             "[-wavelength wl] [-incidence inc] [-range -rng] [-rms] [-dem]"
+    # )
+    # sbas_label.grid(row=4, column=0, columnspan=6, padx=10, pady=5, sticky="w")
+
     # Create progress bar
     progress_bar = ttk.Progressbar(root, mode="determinate")
     progress_bar.grid(row=15, column=0, columnspan=5, padx=10, pady=5, sticky="ew")
@@ -356,6 +434,110 @@ def run_gui():
         root, height=10, width=175, state=tk.DISABLED, wrap=tk.WORD
     )
     console_text.grid(row=17, column=0, columnspan=5, padx=10, pady=5)
+
+    # Add tooltips to all widgets
+    add_tooltip(
+        folder1_entry,
+        "Select the data folder containing Sentinel-1 images .SAFE folders."
+    )
+    add_tooltip(
+        browse_button1,
+        "Browse for the data folder. \nYou should move into the data folder and then click ok to select it."
+    )
+    add_tooltip(
+        ascending_rb,
+        "This selection creates \"asc\" folder such that \"Output Folder>Project Name>asc\"."
+    )
+    add_tooltip(
+        descending_rb,
+        "This selection creates \"des\" folder such that \"Output Folder>Project Name>des\"."
+    )
+    add_tooltip(
+        browse_button2,
+        "Browse for the GACOS data folder containing atmospheric correction files."
+    )
+    add_tooltip(
+        dem_file_entry,
+        "Select the DEM file to be used for processing. It should be in GMT format (.grd).\n"
+        "GMTSAR make_dem.csh script can be used to generate the DEM file from SRTM data."
+    )
+    add_tooltip(
+        browse_button_dem,
+        "Browse for the DEM file."
+    )
+    add_tooltip(
+        pin_file_entry,
+        "This pin.II file is a text file containing the coordinates of 2 pins encompassing your AOI."
+    )
+    add_tooltip(
+        browse_button_pin,
+        "Browse for the pin.II file."
+    )
+    add_tooltip(
+        project_name_entry,
+        "A folder with your defined name here will be created in the \"Output Folder\"."
+    )
+    add_tooltip(
+        output_folder_entry,
+        "Select the folder where the output files will be saved."
+    )
+    add_tooltip(
+        browse_button3,
+        "Browse for the output folder."
+    )
+    add_tooltip(
+        mst_entry,
+        "Enter the custom master image date in the format yyyymmdd (optional).\n"
+        "If not provided, the optimum master image will be selected automatically following the ESA-SNAP selection criteria."
+    )
+    add_tooltip(
+        baselines_entry,
+        "Enter the temporal and perpendicular baselines thresholds.\n"
+        "No interferograms will be generated for images with baselines exceeding these thresholds."
+    )
+    add_tooltip(
+        processing_option_menu,
+        "Select the processing option for subswaths.\n"
+        "You can choose to process all subswaths or only specific combinations of them.\n"
+        "If more than one subswath is selected, those will be merged during the interferogram generation step."
+    )    
+    add_tooltip(
+        multilooking_entry,
+        "Define the multilooking values in range and azimuth directions.\n" 
+        "This process will result in lower resolution interferograms while\n"
+        "reducing the noise and improving coherence. The values should be integers.\n"
+    )
+    add_tooltip(
+        filter_wavelength_entry,
+        "Define the filter wavelength value in meters.\n"
+        "This value will be used to filter the interferograms to reduce noise."
+    )
+    add_tooltip(
+        cores_entry,
+        "Define the number of cores to be used for parallel processing.\n"
+        "This will speed up the different steps of the process by\n"
+        "utilizing the defined cores for parallelization."
+    )
+    add_tooltip(
+        coherence_thresholds_entry,
+        "Enter coherence thresholds for masking and unwrapping, separated by a comma.\n"
+        "Masking allows you to exclude areas with overall low coherence throughout the time series.\n"
+        "Unwrapping threshold defines the absolute value of coherence for each interferogram."
+    )
+    add_tooltip(
+        folder2_entry,
+        "Select the folder containing GACOS atmospheric data in binary\n\".ztd\" format matching acquisition timestamps of input SLC images."
+    )   
+    add_tooltip(
+        inc_angle_entry,
+        "Enter the incidence angle in degrees (e.g., 37.0). This is used for atmospheric correction."
+    )
+
+    atm = " -atm" if atm_var.get() else ""
+    rms = " -rms" if rms_var.get() else ""
+    dem = " -dem" if dem_var.get() else ""
+    smooth = f" -smooth {smooth_var_entry.get()}" if smooth_var_entry.get() else ""
+    
 
     config = load_config()
 
@@ -423,10 +605,19 @@ def run_gui():
                 filter_wavelength_entry, 
                 coherence_thresholds_entry, 
                 inc_angle_entry,
-                cores_entry
+                cores_entry,
+                sbas,
+                atm,
+                rms,
+                dem,
+                smooth
             ),
     )
-    run_button.grid(row=18, column=1, padx=10, pady=20)      
+    run_button.grid(row=18, column=1, padx=10, pady=20)   
+    add_tooltip(
+        run_button,
+        "Run the InSAR time series analysis with the provided inputs."
+    )   
     
     
     # # Start the main loop
@@ -451,8 +642,13 @@ def run_main(
     processing_option,
     atm_option,
     cores_entry,
+    sbas,
+    atm,
+    rms,
+    dem,
+    smooth,
     console_text,
-    progress_bar,
+    progress_bar
 ):
     try:
         in_data_dir = folder1_entry.get()
@@ -493,7 +689,12 @@ def run_main(
             'inc_angle': inc_angle,
             'subswath_option': subswath_option,
             'atm_corr_option': atm_corr_option,
-            'ncores': ncores
+            'ncores': ncores,
+            'sbas': sbas,
+            'atm': atm,
+            'rms': rms,
+            'dem': dem,
+            'smooth': smooth
         })
         save_config(config)
     except Exception as e:
@@ -521,6 +722,11 @@ def run_main(
         subswath_option,
         atm_corr_option,
         ncores,
+        sbas,
+        atm,
+        rms,
+        dem,
+        smooth,
         console_text,
         progress_bar
     )

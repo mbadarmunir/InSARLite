@@ -124,7 +124,7 @@ def generate_paths(output_dir, project_name, node, subswath_option):
             paths = {k: v for k, v in paths.items() if key not in k}
     return paths
 
-def orchestrate_structure_and_copy(output_dir, project_name, node, subswath_option, dem_file, pin_file, in_data_dir, btconfig, console_text, log_file_path):
+def orchestrate_structure_and_copy(output_dir, project_name, node, subswath_option, dem_file, pin_file, in_data_dir, btconfig, console_text=None, log_file_path=None):
         
     # Generate and create the directory structure for the project and get the paths to be used later
     structure = generate_structure(project_name, node, subswath_option)

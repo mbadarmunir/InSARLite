@@ -5,9 +5,11 @@ from gmtsar_gui.part_gacos import run_gui_gacos
 from gmtsar_gui.mean_corr import create_mean_grd
 from gmtsar_gui.part_SBAS import run_gui_sb
 from gmtsar_gui.masking import create_mask
+from utils.utils import add_tooltip, update_console
 import threading
 import os
 import pickle
+import time
 
 def run_function(
     next_button,
@@ -24,7 +26,9 @@ def run_function(
     masking_threshold, unwrapping_threshold = map(float, coherence_threshold.split(","))       
     skip_button.config(state=tk.DISABLED)
     paths_file = os.path.join(output_folder, project_name, "paths.pkl")    
-    log_file_path = os.path.join(output_folder, project_name, "unwrapping.log")
+    log_file_path = os.path.join(output_folder, project_name, f"uwp_{time.strftime('%d%b%Y%H%M%S', time.localtime())}.log")
+    
+    main_start_time = time.time()
 
     if os.path.exists(paths_file):
         with open(paths_file, 'rb') as pf:
@@ -40,15 +44,38 @@ def run_function(
                 dir_path = paths.get(key)
                 if dir_path and os.path.exists(dir_path):
                     intfdir = os.path.join(dir_path, "intf_all")                               
-                    break
+                    break        
+        
         create_mean_grd(intfdir)
+        mean_time = time.time()
+        progress_bar['value'] = 20
+        mean_elapsed_time = time.strftime("%H:%M:%S", time.gmtime(mean_time - main_start_time)) + f".{int((mean_time - main_start_time) % 1 * 100):02d}"
+        update_console(console_text, f"Mean coherence grid created in {mean_elapsed_time}", log_file_path)
+        root.update_idletasks()
+
+        update_console(console_text, "Creating mask ...", log_file_path)                
         create_mask(intfdir, masking_threshold, mask="mask_def.grd")
-        unwrap(paths, unwrapping_threshold, ncores, console_text, log_file_path)
+        mask_time = time.time()
+        mask_elapsed_time = time.strftime("%H:%M:%S", time.gmtime(mask_time - mean_time)) + f".{int((mask_time - mean_time) % 1 * 100):02d}"
+        update_console(console_text, f"Mask created in {mask_elapsed_time}", log_file_path)
+        progress_bar['value'] = 30
+        root.update_idletasks()
+        
+        update_console(console_text, "Starting unwrapping ...", log_file_path)
+        unwrap(paths, unwrapping_threshold, ncores, console_text, log_file_path)        
+        uwp_time = time.time()
+        uwp_elapsed_time = time.strftime("%H:%M:%S", time.gmtime(uwp_time - mask_time)) + f".{int((uwp_time - mask_time) % 1 * 100):02d}"
+        update_console(console_text, f"Unwrapping completed in {uwp_elapsed_time}", log_file_path)
+
         root.after(0, on_task_complete)
 
     # Run the long-running task in a separate thread
     def on_task_complete():
-        next_button.config(state=tk.NORMAL)                
+        next_button.config(state=tk.NORMAL)     
+        end_time = time.time()
+        main_elapsed_time = time.strftime("%H:%M:%S", time.gmtime(end_time - main_start_time)) + f".{int((end_time - main_start_time) % 1 * 100):02d}"
+        update_console(console_text, f"Total time taken for completing Step 3: {main_elapsed_time}", log_file_path)        
+        
         progress_bar['value'] = 100
         root.update_idletasks()
     
@@ -73,7 +100,18 @@ def gacos_function(
     
 def run_gui_uwp(project_name, output_folder):
     root = tk.Tk()
-    root.title("Unwrap Interferograms")
+    root.title("Step 3: Phase unwrapping")
+
+    # Create a help/info icon
+    info_label = tk.Label(root, text="i", fg="blue", cursor="question_arrow", font=("Helvetica", 12, "bold"))
+    info_label.grid(row=0, column=5, padx=10, pady=10, sticky="w")  # or use pack()
+
+    # Add tooltip to it
+    add_tooltip(info_label, "This steps performs phase unwrapping on the filtered interferograms.\n"
+                     "You can adjust the coherence thresholds for masking and unwrapping.\n"
+                     "Masking allows you to exclude areas with overall low coherence throughout the time series.\n"
+                     "Unwrapping threshold defines the absolute value of coherence for each interferogram.\n"
+                     "Phase values will not be unwrapped for pixels having coherence below this threshold.")
 
     # Configure the grid to be scalable
     for i in range(20):
@@ -197,6 +235,35 @@ def run_gui_uwp(project_name, output_folder):
         )
     )
     skip_button.grid(row=4, column=3, padx=10, pady=5, sticky="ew")
+
+    add_tooltip(
+        coherence_thresholds_entry,
+        "Enter coherence thresholds for masking and unwrapping, separated by a comma.\n"
+        "Masking allows you to exclude areas with overall low coherence throughout the time series.\n"
+        "Unwrapping threshold defines the absolute value of coherence for each interferogram."
+    )
+    add_tooltip(
+        cores_entry,
+        "Enter the number of CPU cores to define how many interferograms will be unwrapped\n"
+        "in parallel (given that many cores are available)."
+    )
+
+    add_tooltip(
+        run_button,
+        "Start phase unwrapping process with the provided coherence thresholds."
+    )
+    add_tooltip(
+        gacos_button,
+        "Open GACOS atmospheric correction GUI. Click only if unwrapped interferograms are available."
+    )
+    add_tooltip(
+        next_button,
+        "Proceed to the next step after the unwrapping process is complete."
+    )
+    add_tooltip(
+        skip_button,
+        "Skip everything and move on to the next step."
+    )
     
     # Load the defaults
     coherence_thresholds_entry.insert(0, "0, 0.01")    

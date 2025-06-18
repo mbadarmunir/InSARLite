@@ -2,10 +2,11 @@ import tkinter as tk
 from tkinter import font, ttk, scrolledtext
 from gmtsar_gui.gacos_atm_corr import gacos
 from gmtsar_gui.part_SBAS import run_gui_sb
-from utils.utils import browse_folder, update_console
+from utils.utils import browse_folder, update_console, add_tooltip
 import threading
 import os
 import pickle
+import time
 
 def run_function(
     next_button,    
@@ -19,7 +20,10 @@ def run_function(
     console_text
     ):                
     paths_file = os.path.join(output_folder, project_name, "paths.pkl")    
-    log_file_path = os.path.join(output_folder, project_name, "gacos.log")
+    log_file_path = os.path.join(output_folder, project_name, f"gacos_{time.strftime('%d%b%Y%H%M%S', time.localtime())}.log")
+    
+    main_start_time = time.time()
+
 
     if os.path.exists(paths_file):
         with open(paths_file, 'rb') as pf:
@@ -42,6 +46,13 @@ def run_function(
             update_console(console_text, "Performing GACOS correction ...", log_file_path)
             tdir = os.path.join(os.path.dirname(intfdir), 'topo')                
         gacos(IFGs, gacos_dir, tdir, incidence, intfdir, num_cores=ncores)
+        gacos_time = time.time()        
+        gacos_elapsed_time = time.strftime("%H:%M:%S", time.gmtime(gacos_time - main_start_time)) + f".{int((gacos_time - main_start_time) % 1 * 100):02d}"
+        update_console(
+            console_text,
+            f"GACOS atmospheric correction completed in {gacos_elapsed_time}",
+            log_file_path
+        )
         root.after(0, on_task_complete)
 
     # Run the long-running task in a separate thread
@@ -64,7 +75,19 @@ def next_function(
     
 def run_gui_gacos(project_name, output_folder):
     root = tk.Tk()
-    root.title("Apply GACOS Atm. correction to Unwrapped Interferograms")
+    root.title("Step 4: GACOS atmospheric correction (Optional)")
+
+    # Create a help/info icon
+    info_label = tk.Label(root, text="i", fg="blue", cursor="question_arrow", font=("Helvetica", 12, "bold"))
+    info_label.grid(row=0, column=5, padx=10, pady=10, sticky="w")  # or use pack()
+
+    # Add tooltip to it
+    add_tooltip(info_label, "Using this part of the tool, you can apply GACOS atmospheric correction to the unwrapped interferograms.\n"
+        "You can select the GACOS data folder, specify the incidence angle, and the number of cores to use for processing.\n"
+        "The GACOS data folder should contain the GACOS data files in binary format for the area of interest matching\n" \
+        "with the acquisition timestamps of the whole input time series.\n"
+        "The incidence angle is used to adjust the atmospheric correction based on the geometry of the interferograms.\n"
+        "The number of cores can be adjusted to speed up the processing.")
 
     # Configure the grid to be scalable
     for i in range(20):
@@ -183,7 +206,32 @@ def run_gui_gacos(project_name, output_folder):
         state=tk.DISABLED
     )
     gacos_button.grid(row=5, column=2, padx=10, pady=5, sticky="ew")
+
+    add_tooltip(
+        gacos_folder_entry,
+        "Select the folder containing GACOS atmospheric data in binary\n\".ztd\" format matching acquisition timestamps of input SLC images."
+    )
+    add_tooltip(
+        browse_buttong,
+        "Browse for the GACOS data folder containing atmospheric correction files."
+    )
     
+    add_tooltip(
+        incidence_angle_entry,
+        "Enter the incidence angle in degrees (e.g., 37.0). This is used for atmospheric correction."
+    )
+    add_tooltip(
+        cores_entry,
+        "Specify the number of CPU cores to use for parallel GACOS correction processing."
+    )
+    add_tooltip(
+        run_button,
+        "Run the GACOS correction process with the provided inputs."
+    )    
+    add_tooltip(
+        next_button,
+        "Proceed to the next step after the GACOS correction process is complete."
+    )
     # Load the defaults
     incidence_angle_entry.insert(0, "37.0")    
 

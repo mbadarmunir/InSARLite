@@ -4,6 +4,24 @@ import sys
 import json
 import tkinter as tk
 from tkinter import filedialog, messagebox
+import pyautogui
+
+
+def save_highres_gui_image(root, filename="/home/badar/0_PhD/pipeInSAR/src/gui_snapshot.png"):
+    # Resize GUI to a large resolution
+    offset = 30
+    root.update_idletasks()
+    # Get the position and size of the window
+    x = root.winfo_rootx()
+    y = root.winfo_rooty() - offset
+    width = root.winfo_width()
+    # Add the height of the title bar to the window height
+    height = root.winfo_height()+ offset  # Adjust this value if needed to include the title bar height
+
+    # Capture the screen region of the window (no need to raise or resize)
+    screenshot = pyautogui.screenshot(region=(x, y, width, height))
+    
+    screenshot.save(filename)
 
 
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.json")
@@ -196,4 +214,37 @@ def rm_symlink(file):
     if os.path.islink(file):
         os.unlink(file)
 
-            
+class ToolTip:
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.tip_window = None
+        self.widget.bind("<Enter>", self.show_tip)
+        self.widget.bind("<Leave>", self.hide_tip)
+
+    def show_tip(self, event=None):
+        if self.tip_window or not self.text:
+            return
+        x = self.widget.winfo_rootx() + 20
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5
+        self.tip_window = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        tw.wm_geometry(f"+{x}+{y}")
+        label = tk.Label(
+            tw, text=self.text,
+            background="#ffffe0",
+            relief=tk.SOLID,
+            borderwidth=1,
+            font=("tahoma", 10),
+            anchor="w",              # Left align text
+            justify="left"           # Left justify multi-line text
+        )
+        label.pack(ipadx=1)
+
+    def hide_tip(self, event=None):
+        if self.tip_window:
+            self.tip_window.destroy()
+            self.tip_window = None
+
+def add_tooltip(widget, text):
+    ToolTip(widget, text)

@@ -8,7 +8,7 @@ def sb_prep(intf, btable, intfdir, uwp):
             f'prep_sbas.csh {intf} {btable} {intfdir} {uwp} corr.grd',
             shell=True)
         
-def sb_inversion(sdir, paths, inc_angle):
+def sb_inversion(sdir, paths, inc_angle, atm="", rms=" -rms", dem=" -dem", sbas="sbas", smooth=" -smooth 5.0"):
     os.chdir(sdir)
     pmerge = paths.get("pmerge")
    
@@ -27,6 +27,7 @@ def sb_inversion(sdir, paths, inc_angle):
         if os.path.exists(os.path.join(intfdir, subfolder, 'unwrap_GACOS_corrected_detrended.grd')):
             uwp = 'unwrap_GACOS_corrected_detrended.grd'
             break    
+    print(f"Creating required files for sbas using uwp: {uwp}, intf.in: {intf}, btable: {btable}, intfdir: {intfdir}")
     sb_prep(intf, btable, intfdir, uwp)
 
     if os.path.exists('intf.tab') and os.path.exists('scene.tab'):
@@ -59,9 +60,15 @@ def sb_inversion(sdir, paths, inc_angle):
                     rw = float(line.split('=')[1].strip())
         range = c / rs / 2 * (xmin + xmax) / 2 + nr
         print('Starting SBAS process')
+        
+        sb_command = f"{sbas} intf.tab scene.tab {intf_count} {scene_count} {xval} {yval} -range {range} -incidence {inc_angle} -wavelength {rw} {smooth} {atm} {rms} {dem}".rstrip()
 
-        run_command(
-            f"sbas intf.tab scene.tab {intf_count} {scene_count} {xval} {yval} -range {range} -incidence {inc_angle} -wavelength {rw} -smooth 5.0 -rms -dem")
+        if sbas == 'sbas_parallel':
+            sb_command = sb_command + ' -mmap'
+        
+        print(sb_command)
+        run_command(sb_command)
+            
 
 
         # if not os.path.exists(os.path.join(dsbas, 'vel_ll.kml')):

@@ -66,8 +66,9 @@ def get_first_two_files(path):
     except IndexError:
         return None, None, None
 
-def merge_thread(pmerge, ncores, console_text, log_file_path):        
-    if pmerge and os.path.exists(pmerge):        
+def merge_thread(pmerge, ncores, console_text, log_file_path, mst = None):        
+    if pmerge and os.path.exists(pmerge):      
+
         update_console(console_text, "Merging interferograms ...", log_file_path)
         update_console(
             console_text, 
@@ -75,14 +76,17 @@ def merge_thread(pmerge, ncores, console_text, log_file_path):
             log_file_path
         )
         os.chdir(pmerge)
+
         dir_path = '..'        
         mst_file = "../../mst.pkl"
-        if os.path.exists(mst_file):
-            with open(mst_file, 'rb') as mf:            
-                mst = pickle.load(mf)
-        else:
-            sys.exit("Master not found")
-        if not next(os.walk('.'))[1]:                
+        if mst is None:
+            if os.path.exists(mst_file):
+                with open(mst_file, 'rb') as mf:
+                    mst = pickle.load(mf)
+            else:
+                print("Master pkl not found")
+
+        if not next(os.walk('.'))[1]:                           
             with open('merge_list', 'w') as out:                
                 for line in create_merge(dir_path):
                     out.write(line + '\n')

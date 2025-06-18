@@ -40,6 +40,11 @@ def run_analysis(
     subswath_option,
     atm_corr_option,
     ncores,
+    sbas,
+    atm,
+    rms,
+    dem,
+    smooth,
     console_text,
     progress_bar
 ):
@@ -235,7 +240,8 @@ def run_analysis(
             shutil.copy(dem_file, pmerge) 
 
         def merge_ifgs_thread():
-            merge_thread(pmerge, ncores, console_text, log_file_path)
+            update_console(console_text, pmerge, log_file_path)
+            merge_thread(pmerge, ncores, console_text, log_file_path, mst)
 
         thread_merge = threading.Thread(target=merge_ifgs_thread)
         thread_merge.start()
@@ -348,7 +354,7 @@ def run_analysis(
     # Perform SB inversion
     update_console(console_text, "Performing SB inversion ...", log_file_path)
     def sb_inversion_thread():
-        sb_inversion(paths.get('psbas'), paths, inc_angle)
+        sb_inversion(paths.get('psbas'), paths, inc_angle,atm, rms, dem, sbas, smooth)
 
     thread_sb_inversion = threading.Thread(target=sb_inversion_thread)
     thread_sb_inversion.start()
@@ -400,6 +406,11 @@ def main(
     subswath_option,
     atm_corr_option,
     ncores,
+    sbas,
+    atm,
+    rms,
+    dem,
+    smooth,
     console_text,
     progress_bar
 ):
@@ -425,6 +436,11 @@ def main(
         subswath_option,
         atm_corr_option,
         ncores,
+        sbas,
+        atm,
+        rms,
+        dem,
+        smooth,
         console_text,
         progress_bar
     ))

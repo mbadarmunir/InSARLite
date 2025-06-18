@@ -3,9 +3,11 @@ from tkinter import font, ttk, scrolledtext
 from gmtsar_gui.ifgs_generation import gen_ifgs
 from gmtsar_gui.part_unwrap import run_gui_uwp
 from gmtsar_gui.mergeIFGs import merge_thread
+from utils.utils import add_tooltip, update_console
 import threading
 import os
 import pickle
+import time
 
 def run_function(
     next_button,
@@ -25,7 +27,9 @@ def run_function(
     ncores = int(cores_entry.get())
     paths_file = os.path.join(output_folder, project_name, "paths.pkl")
     mst_file = os.path.join(output_folder, project_name, "mst.pkl")
-    log_file_path = os.path.join(output_folder, project_name, "gen_ifgs.log")
+    log_file_path = os.path.join(output_folder, project_name, f"ifgs_{time.strftime('%d%b%Y%H%M%S', time.localtime())}.log")
+    
+    main_start_time = time.time()
 
     if os.path.exists(paths_file) and os.path.exists(mst_file):
         with open(paths_file, 'rb') as pf, open(mst_file, 'rb') as mf:
@@ -35,10 +39,30 @@ def run_function(
     def task_wrapper():
         gen_ifgs(paths, mst, filter_wavelength, rng, az, ncores, console_text, log_file_path)
         progress_bar['value'] = 50
+        ifgs_time = time.time()
+        ifgs_elapsed_time = time.strftime("%H:%M:%S", time.gmtime(ifgs_time - main_start_time)) + f".{int((ifgs_time - main_start_time) % 1 * 100):02d}"
+
+        update_console(console_text, 
+                    f"IFGs generated in {ifgs_elapsed_time}", 
+                    log_file_path) 
+
         root.update_idletasks()
         pmerge = paths.get("pmerge")
         if pmerge and os.path.exists(pmerge):
             merge_thread(pmerge, ncores, console_text, log_file_path)
+        mrg_time = time.time()
+        mrg_elapsed_time = time.strftime("%H:%M:%S", time.gmtime(mrg_time - ifgs_time)) + f".{int((mrg_time - ifgs_time) % 1 * 100):02d}"
+        
+        step2_elapsed_time = time.strftime("%H:%M:%S", time.gmtime(mrg_time - main_start_time)) + f".{int((mrg_time - main_start_time) % 1 * 100):02d}"
+
+        update_console(console_text, 
+                    f"IFGs merged in {mrg_elapsed_time}", 
+                    log_file_path) 
+        
+        update_console(console_text, 
+                    f"Step 2 completed in {step2_elapsed_time}", 
+                    log_file_path)
+
         root.after(0, on_task_complete)
 
     # Run the long-running task in a separate thread
@@ -63,7 +87,25 @@ def next_function(
     
 def run_gui_ifg(project_name, output_folder):
     root = tk.Tk()
-    root.title("Generate Interferograms")
+    root.title("Step 2: Interferograms Generation")
+
+    # Create a help/info icon
+    info_label = tk.Label(root, text="i", fg="blue", cursor="question_arrow", font=("Helvetica", 12, "bold"))
+    info_label.grid(row=0, column=5, padx=10, pady=10, sticky="w")  # or use pack()
+
+    # Add tooltip to it
+    add_tooltip(info_label, "In this step, you can generate interferograms for the pairs\n"
+            "defined by the interferogram network plot generated in previous step.\n"
+            "One interferogram of (each) subswath will be generated using single core irrespective of the defined \"Number of cores\"\n"
+            "to convert elevation values from DEM into corresponding phase values.\n"
+            "Once the elevation phase is calculated, all subsequent interferograms\n"
+            "per subswath will be generated in parallel utilizing the defined number of cores.\n"
+            "Additionally:\n"
+            "1. The coherence grid for each interferogram will be generated\n"
+            "2. Golden filter will be applied to the interferograms and \n"
+            "   corresponding filtererd phase files will be generated\n"
+            "3. The filtered interferograms per subswath will be merged if applicable\n"
+            "4. Mean coherence grid will be generated for all interferograms.")
 
     # Configure the grid to be scalable
     for i in range(20):
@@ -184,6 +226,37 @@ def run_gui_ifg(project_name, output_folder):
         )
     )
     skip_button.grid(row=5, column=2, padx=10, pady=5, sticky="ew")
+
+    add_tooltip(
+        multilooking_entry,
+        "Define the multilooking values in range and azimuth directions.\n" 
+        "This process will result in lower resolution interferograms while\n"
+        "reducing the noise and improving coherence. The values should be integers.\n"
+    )
+    add_tooltip(
+        filter_wavelength_entry,
+        "Define the filter wavelength value in meters.\n"
+        "This value will be used to filter the interferograms to reduce noise."
+    )
+    add_tooltip(
+        cores_entry,
+        "Define the number of cores to be used for parallel processing.\n"
+        "This will speed up the interferograms generation process by\n"
+        "utilizing the defined cores for parallelization."
+    )
+
+    add_tooltip(
+        run_button,
+        "Run the Interferograms generation process with the provided inputs."
+    )    
+    add_tooltip(
+        next_button,
+        "Proceed to the next step after the interferograms have been generated and merged if applicable."
+    )
+    add_tooltip(
+        skip_button,
+        "Skip everything and move on to the next step for the currently defined inputs."
+    )
     
     # Load the defaults
     multilooking_entry.insert(0, "8, 2")
