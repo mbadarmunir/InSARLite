@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import font, ttk, scrolledtext
-from utils.utils import load_config_part, browse_folder, browse_file, save_config_part, exitGUI, add_tooltip, save_highres_gui_image
+from utils.utils import load_config_part, browse_folder, browse_file, save_config_part, exitGUI, add_tooltip
 from gmtsar_gui.part_network import p_start_network
 from gmtsar_gui.masterselection import select_mst
 from gmtsar_gui.structuring import orchestrate_structure_and_copy
