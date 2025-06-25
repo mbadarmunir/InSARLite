@@ -1,4 +1,4 @@
-# pipeInSAR
+# InSARLite
 
 To run the GUI, Please run following
 import pipeinsar
