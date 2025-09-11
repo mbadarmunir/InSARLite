@@ -1,6 +1,5 @@
 import os
 import subprocess
-import sys
 from utils.utils import run_command
 
 def get_grd_dimensions(grd_file):
@@ -8,34 +7,6 @@ def get_grd_dimensions(grd_file):
     dimensions = output.split()[1:5]  # Extracting the dimensions part of the output
     return dimensions
 
-
-# Check if all .grd files have the same dimensions
-# def check_grd_dimensions(files):
-#     if not files:
-#         print("No .grd files found.")
-#         return False
-
-#     dimensions_dict = {}
-#     for file in files:
-#         dimensions = tuple(get_grd_dimensions(file))
-#         if dimensions in dimensions_dict:
-#             dimensions_dict[dimensions].append(file)
-#         else:
-#             dimensions_dict[dimensions] = [file]
-
-#     unique_dimensions = list(dimensions_dict.keys())
-#     if len(unique_dimensions) == 1:
-#         print("All .grd files have the same dimensions.")
-#         return True
-#     else:
-#         print(f"There are {len(unique_dimensions)} unique instances of dimensions.")
-#         for dimensions, file_list in dimensions_dict.items():
-#             print(f"Dimensions: {dimensions}, Count: {len(file_list)}, Files: {file_list}")
-#         least_occurrence = min(dimensions_dict.items(), key=lambda x: len(x[1]))
-#         print(f"Mismatch dimension: {least_occurrence[0]}, File: {least_occurrence[1]}")
-#         return False
-
-# Get the list of corr.grd files having the highest occurrence of dimensions
 def get_highest_occurrence_files(files):
     if not files:
         return []
@@ -106,14 +77,7 @@ def compute_mean_and_std(grid_files, scale, outmean, outstd):
         tmp = subprocess.check_output(f"gmt grdinfo -C -L2 {name}.grd", shell=True).decode().strip().split()
         limitU = float(tmp[6])
         limitL = float(tmp[5])
-        # std = float(tmp[12])
         run_command(f"gmt makecpt -Cseis -I -Z -T{limitL}/{limitU}/0.1 -D > {name}.cpt")
-        # (float(subprocess.check_output(f"gmt grdinfo {name}.grd -C", shell=True).decode().strip().split()[2]) -
-        #           float(subprocess.check_output(f"gmt grdinfo {name}.grd -C", shell=True).decode().strip().split()[
-        #                     1])) / 4
-        # (float(subprocess.check_output(f"gmt grdinfo {name}.grd -C", shell=True).decode().strip().split()[4]) -
-        #           float(subprocess.check_output(f"gmt grdinfo {name}.grd -C", shell=True).decode().strip().split()[
-        #                     3])) / 4
         run_command(
             f"gmt grdimage {name}.grd -I{name}.grad.grd -C{name}.cpt -JX6.5i -Bxaf+lRange -Byaf+lAzimuth -BWSen "
             f"-X1.3i -Y3i -P -K > {name}.ps")
@@ -123,15 +87,6 @@ def compute_mean_and_std(grid_files, scale, outmean, outstd):
         for file in [f"{name}.cpt", f"{name}.grad.grd"]:
             if os.path.exists(file):
                 os.remove(file)
-
-def create_ref_point_ra(topodir, outmean):
-    output = subprocess.check_output(f"gmt grdinfo -M {outmean}", shell=True).decode().strip().split()
-    v_max = output.index('v_max:')
-    x = output[v_max + 5]
-    y = output[v_max + 8]
-    
-    with open(os.path.join(topodir, "ref_point.ra"), 'w') as f:
-        f.write(f"{x} {y}\n")
 
 def create_mean_grd(ifgsroot):
     os.chdir(ifgsroot)
@@ -145,9 +100,7 @@ def create_mean_grd(ifgsroot):
     # Execute the check
     if not os.path.exists(os.path.join(ifgsroot, outmean)):
         print(f'Calculating mean coherence grd for {ifgsroot}')  
-        print(list_file)      
         grdfiles = get_highest_occurrence_files(list_file)
         compute_mean_and_std(grdfiles, scale, outmean, outstd)
-        create_ref_point_ra(os.path.join(os.path.dirname(ifgsroot), 'topo'), outmean)
     else:
         print('Mean grid already calculated')

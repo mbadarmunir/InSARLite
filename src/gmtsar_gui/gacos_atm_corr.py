@@ -19,8 +19,8 @@ def get_value_from_rsc(file, key):
     return None
 
 def operation(args):
-    master_ztd, master_rsc, slave_ztd, slave_rsc, reference_point, incidence = args
-    
+    master_ztd, master_rsc, slave_ztd, slave_rsc, reference_point, incidence, uwp_phase = args
+
     print(f"Starting operation for master: {master_ztd}, slave: {slave_ztd}")
     try:
         incidence = float(incidence)
@@ -64,7 +64,7 @@ def operation(args):
         subprocess.run(['proj_ll2ra.csh', 'trans.dat', 'zpddm.grd', 'zpddm_ra.grd'])
 
         # RESAMPLE WITH UNWRAP GRID PARAMETERS
-        unwrap_info = subprocess.run(['gmt', 'grdinfo', '-C', 'unwrap.grd'], capture_output=True, text=True).stdout.split()
+        unwrap_info = subprocess.run(['gmt', 'grdinfo', '-C', uwp_phase], capture_output=True, text=True).stdout.split()
         xmin, xmax, ymin, ymax, xinc, yinc = unwrap_info[1], unwrap_info[2], unwrap_info[3], unwrap_info[4], \
                                              unwrap_info[7], unwrap_info[8]
 
@@ -87,7 +87,7 @@ def operation(args):
         subprocess.run(['gmt', 'grdmath', 'szpddm_phase.grd', str(incidence), 'COSD', 'DIV', '=', 'szpddm_phase_LOS.grd'])
 
         # CORRECTION WITH GACOS DATA
-        subprocess.run(['gmt', 'grdmath', 'unwrap.grd', 'szpddm_phase_LOS.grd', 'SUB', '=', 'unwrap_GACOS_corrected.grd'])
+        subprocess.run(['gmt', 'grdmath', uwp_phase, 'szpddm_phase_LOS.grd', 'SUB', '=', 'unwrap_GACOS_corrected.grd'])
 
         # DETRENDING
         subprocess.run(['gmt', 'grdtrend', 'unwrap_GACOS_corrected.grd', '-N3r', '-Dunwrap_GACOS_corrected_detrended.grd'])
@@ -118,12 +118,18 @@ def gacos_worker(args):
             second_ztd = os.path.join(GACOS_dir, f"{scd_date}.ztd")
             second_rsc = os.path.join(GACOS_dir, f"{scd_date}.ztd.rsc")
 
-            if os.path.basename(intf_dir) == 'merge':
-                create_symlink(os.path.join(intf_dir, "trans.dat"), os.path.join('.',"trans.dat"))
-            else:
-                create_symlink("../../topo/trans.dat", os.path.join('.',"trans.dat"))
+            # if os.path.basename(intf_dir) == 'merge':
+            #     create_symlink(os.path.join(intf_dir, "trans.dat"), os.path.join('.',"trans.dat"))
+            # else:
+            create_symlink(os.path.join(topo_dir), os.path.join('.',"trans.dat"))
             if not os.path.exists('unwrap_GACOS_corrected_detrended.grd'):
-                operation((first_ztd, first_rsc, second_ztd, second_rsc, reference_point_ra, incidence))
+                uwps = [os.path.join(root, f) for root, _, files in os.walk(intf_dir) for f in files if f == 'unwrap.grd']
+                uwpn = [os.path.join(root, f) for root, _, files in os.walk(intf_dir) for f in files if f == 'unwrap_pin.grd']
+                if len(uwps) == len(uwpn):
+                    uwp_phase = "unwrap_pin.grd"
+                else:
+                    uwp_phase = "unwrap.grd"
+                operation((first_ztd, first_rsc, second_ztd, second_rsc, reference_point_ra, incidence, uwp_phase))
             else:
                 print('GACOS Correction already done for the current dir')
             os.remove("trans.dat")
@@ -132,11 +138,11 @@ def gacos_worker(args):
     except Exception as e:
         print(f"Error processing interferogram {dir}: {e}")
 
-def gacos(interferogram_dirs, GACOS_dir, topo_dir, incidence, intf_dir, num_cores):
+def gacos(GACOS_dir, topo_dir, incidence, intf_dir, num_cores):
     
     args_list = [
         (GACOS_dir, topo_dir, incidence, intf_dir, dir)
-        for dir in interferogram_dirs
+        for dir in os.listdir(intf_dir) if os.path.isdir(os.path.join(intf_dir, dir))
     ]
 
     print(f"Starting GACOS correction with {num_cores} cores")

@@ -2,6 +2,8 @@ import os
 import shutil
 import subprocess
 from utils.utils import update_console
+import sys
+import tkinter as tk
 
 def remove_unconnected_images(ind, dind):
     # Open the ind file and read it line by line
@@ -19,26 +21,35 @@ def remove_unconnected_images(ind, dind):
     # Check if the number of unique integers matches the number of rows in dind
     with open(dind, 'r') as f:
         nrows = sum(1 for _ in f)
-
-    if len(unique_integers) != nrows:
-        # Remove IMGs from data.in file(s) who are not connected in final network                
-        dind_old = dind + '.old'
-        shutil.copy(dind, dind_old)
-        
-        with open(dind_old, 'r') as f_old, open(dind, 'w') as f_new:
-            for line in f_old:
-                date_str = line[15:23]
-                if date_str in unique_integers:
-                    f_new.write(line)                
-
-        print(
-            "Image epochs not connected to the network are removed from data.in file(s) "
-            "so that they are not aligned in next step to save time"
-        )
+    if len(unique_integers) == 0:
+        print("No pairs found.")
+        for widget in tk._default_root.children.values():
+            try:
+                widget.destroy()
+            except Exception:
+                pass
+        sys.exit()
+        return
     else:
-        print(
-            "All image epochs are connected in the network and will be aligned in next step"            
-        )
+        if len(unique_integers) != nrows:
+            # Remove IMGs from data.in file(s) who are not connected in final network                
+            dind_old = dind + '.old'
+            shutil.copy(dind, dind_old)
+            
+            with open(dind_old, 'r') as f_old, open(dind, 'w') as f_new:
+                for line in f_old:
+                    date_str = line[15:23]
+                    if date_str in unique_integers:
+                        f_new.write(line)                
+
+            print(
+                "Image epochs not connected to the network are removed from data.in file(s) "
+                "so that they are not aligned in next step to save time"
+            )
+        else:
+            print(
+                "All image epochs are connected in the network and will be aligned in next step"            
+            )
             
 def gen_pairs(paths, parallel_baseline, perpendicular_baseline, console_text, log_file_path):
     for key in ["pF1", "pF2", "pF3"]:

@@ -5,6 +5,10 @@ import time
 from requests.exceptions import ConnectionError, Timeout
 from datetime import datetime, timedelta
 from utils.utils import read_file_lines, load_config, save_config, create_symlink
+import keyring
+import getpass
+import tkinter as tk
+from tkinter import simpledialog
 
 # Set local directory that stores S1A and S1B orbits
 # orb_dir = "/geosat2/InSAR_Processing/Sentinel_Orbits"
@@ -15,17 +19,26 @@ data_in_file = "data.in"
 # EARTHDATA_USERNAME = "MBadar"
 # EARTHDATA_PASSWORD = "NSFSt3120"
 
-config = load_config()
+SERVICE_NAME = "EarthdataCredentials"
 
-if "EARTHDATA_USERNAME" in config and "EARTHDATA_PASSWORD" in config:
-    EARTHDATA_USERNAME = config["EARTHDATA_USERNAME"]
-    EARTHDATA_PASSWORD = config["EARTHDATA_PASSWORD"]
-else:
-    EARTHDATA_USERNAME = input("Enter your Earthdata username: ")
-    EARTHDATA_PASSWORD = input("Enter your Earthdata password: ")
-    config["EARTHDATA_USERNAME"] = EARTHDATA_USERNAME
-    config["EARTHDATA_PASSWORD"] = EARTHDATA_PASSWORD
-    save_config(config)
+def get_earthdata_credentials():
+    username = keyring.get_password(SERVICE_NAME, "username")
+    password = keyring.get_password(SERVICE_NAME, "password")
+    if username is None or password is None:
+        # Pop up a dialog box to get credentials
+        root = tk.Tk()
+        root.withdraw()
+        username = simpledialog.askstring("Earthdata Login", "Enter your Earthdata username:", parent=root)
+        password = simpledialog.askstring("Earthdata Login", "Enter your Earthdata password:", show='*', parent=root)
+        root.destroy()
+        if username and password:
+            keyring.set_password(SERVICE_NAME, "username", username)
+            keyring.set_password(SERVICE_NAME, "password", password)
+        else:
+            raise Exception("Earthdata credentials are required.")
+    return username, password
+
+EARTHDATA_USERNAME, EARTHDATA_PASSWORD = get_earthdata_credentials()
 
 def sort_file_lines(input_file, output_file=None):
     """Sort lines of a text file alphabetically."""

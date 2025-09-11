@@ -54,7 +54,7 @@ def gen_ifgs(paths, mst, filter_wavelength, rng, az, ncores, console_text=None, 
                 ld = []
 
             if os.path.exists(intfdir) and len(ld) > 0:
-                if os.path.exists(os.path.join(intfdir, next(os.walk(intfdir))[1][0], 'phase.pdf')):
+                if os.path.exists(os.path.join(intfdir, next(os.walk(intfdir))[1][0], 'phasefilt.grd')):
                     print('First IFG for {} already generated'.format(os.path.basename(dir_path)))
             else:
                 # Generate IFGs
@@ -65,7 +65,7 @@ def gen_ifgs(paths, mst, filter_wavelength, rng, az, ncores, console_text=None, 
                 subprocess.call('head -1 intf.in>one.in', shell=True)
                 subprocess.call('intf_tops.csh one.in batch_tops.config', shell=True)
 
-                fint = os.path.join(intfdir, next(os.walk(intfdir))[1][0], 'phase.pdf')
+                fint = os.path.join(intfdir, next(os.walk(intfdir))[1][0], 'phasefilt.grd')
                 
                 if not fint and not os.path.exists(fint):
                     raise RuntimeError('Interferogram generation failed. Please check the log file for more details.')
@@ -74,7 +74,7 @@ def gen_ifgs(paths, mst, filter_wavelength, rng, az, ncores, console_text=None, 
                 else:
                     print("One interferogram for {} generated ".format(os.path.basename(dir_path)))
 
-            if len(ld) > 1 and os.path.exists(os.path.join(intfdir, next(os.walk(intfdir))[1][-1], 'phase.pdf')):
+            if len(ld) > 1 and os.path.exists(os.path.join(intfdir, next(os.walk(intfdir))[1][-1], 'phasefilt.grd')):
                 print('All IFGs for {} are already generated'.format(os.path.basename(dir_path)))
 
             else:

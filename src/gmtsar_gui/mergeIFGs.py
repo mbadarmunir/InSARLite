@@ -66,33 +66,37 @@ def get_first_two_files(path):
     except IndexError:
         return None, None, None
 
-def merge_thread(pmerge, ncores, console_text, log_file_path, mst = None):        
+def merge_thread(pmerge, ncores, mst=None):        
     if pmerge and os.path.exists(pmerge):      
 
-        update_console(console_text, "Merging interferograms ...", log_file_path)
-        update_console(
-            console_text, 
-            f"The current release will ignore defined {ncores} cores and utilize all available cores for merging", 
-            log_file_path
-        )
+        print("Merging interferograms ...")
+        print(f"The current release will ignore defined {ncores} cores and utilize all available cores for merging")
         os.chdir(pmerge)
 
-        dir_path = '..'        
-        mst_file = "../../mst.pkl"
-        if mst is None:
-            if os.path.exists(mst_file):
-                with open(mst_file, 'rb') as mf:
-                    mst = pickle.load(mf)
-            else:
-                print("Master pkl not found")
+        dir_path = '..'
 
-        if not next(os.walk('.'))[1]:                           
-            with open('merge_list', 'w') as out:                
+        if not next(os.walk('.'))[1]:
+            with open('merge_list', 'w') as out:
                 for line in create_merge(dir_path):
                     out.write(line + '\n')
             with open('merge_list', 'r') as f:
                 lines = f.readlines()
-            lines.insert(0, lines.pop(lines.index(list(filter(lambda x: mst in x.split(',')[0].split(':')[1], lines))[0])))
+            # Troubleshooting: Split the line into smaller parts
+            # Find the line containing mst in the first file name
+            filtered_lines = list(filter(lambda x: mst in x.split(',')[0].split(':')[1], lines))
+            if not filtered_lines:
+                filtered_lines = list(filter(lambda x: mst in x.split(',')[0].split(':')[2], lines))
+            print(f"Filtered lines containing mst '{mst}': {filtered_lines}")
+            # Get the index of that line
+            if filtered_lines:
+                mst_line = filtered_lines[0]
+                mst_index = lines.index(mst_line)
+                # Remove the line from its current position
+                popped_line = lines.pop(mst_index)
+                # Insert it at the beginning
+                lines.insert(0, popped_line)
+            # Original line (commented out):
+            # lines.insert(0, lines.pop(lines.index(list(filter(lambda x: mst in x.split(',')[0].split(':')[1], lines))[0])))
             with open('merge_list', 'w') as f:
                 for line in lines:
                     f.write(line)
@@ -100,5 +104,5 @@ def merge_thread(pmerge, ncores, console_text, log_file_path, mst = None):
                 os.remove('batch_tops.config')
                 shutil.copy(f"{dir_path}/F2/batch_tops.config", 'batch_tops.config')
             subprocess.call('merge_batch_parallel.sh merge_list batch_tops.config', shell=True)
-            
-        update_console(console_text, "Interferograms merged ...", log_file_path)
+
+        print("Interferograms merged ...")
