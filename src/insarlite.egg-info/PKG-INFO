@@ -1,0 +1,41 @@
+Metadata-Version: 2.2
+Name: insarlite
+Version: 0.0.2
+Summary: A GUI package for GMTSAR workflow
+Author-email: Badar Munir <m.b.munir@utwente.nl>
+Project-URL: Homepage, https://github.com/mbadarmunir/InSARLite
+Project-URL: Issues, https://github.com/mbadarmunir/InSARLite/issues
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+
+# insarlite
+
+To run the GUI as an app from the terminal after installing the package, use:
+
+```bash
+InSARLiteApp
+```
+
+This requires you to define an entry point in your `setup.py` or `pyproject.toml` like:
+
+```python
+# setup.py example
+entry_points={
+    'console_scripts': [
+        'InSARLiteApp=insarlite.main:main',
+    ],
+}
+```
+
+Or in `pyproject.toml` (for setuptools):
+
+```toml
+[project.scripts]
+InSARLiteApp = "insarlite.main:main"
+```
+
+After installation, you can launch the GUI by simply running `InSARLiteApp` in your terminal.

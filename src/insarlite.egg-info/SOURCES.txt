@@ -33,10 +33,10 @@ src/gmtsar_gui/structuring.py
 src/gmtsar_gui/unwrap.py
 src/gmtsar_gui/unwrapping.py
 src/insarlite.py
-src/pipeinsar.egg-info/PKG-INFO
-src/pipeinsar.egg-info/SOURCES.txt
-src/pipeinsar.egg-info/dependency_links.txt
-src/pipeinsar.egg-info/top_level.txt
+src/insarlite.egg-info/PKG-INFO
+src/insarlite.egg-info/SOURCES.txt
+src/insarlite.egg-info/dependency_links.txt
+src/insarlite.egg-info/top_level.txt
 src/utils/__init__.py
 src/utils/__pycache__/__init__.cpython-312.pyc
 src/utils/__pycache__/utils.cpython-312.pyc

@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "InSARLiteApp"
 version = "0.0.2"
 authors = [
-  { name="Muhammad Badar Munir", email="m.b.munir@utwente.nl" },
+  { name="Muhammad Badar Munir", email="mbadarmunir@gmail.com" },
 ]
 description = "A GUI package for GMTSAR workflow"
 readme = "README.md"
@@ -33,12 +33,17 @@ dependencies = [
   "cartopy",
   "dask",
   "basemap; platform_system != 'Windows'",  # basemap is not available on Windows via pip
+  "Pillow",
+  "scipy",
+  "lxml",
 ]
 
-packages = ["pipeinsar", "pipeinsar.gmtsar_gui", "pipeinsar.utils"]
+
+[tool.setuptools.packages]
+find = {}
 
 [project.scripts]
-insarlite = "insarlite:main"
+InSARLiteApp = "insarlite.main:main"
 
 [project.urls]
 Homepage = "https://github.com/mbadarmunir/InSARLiteApp"
