@@ -1,41 +1,40 @@
-Metadata-Version: 2.2
+Metadata-Version: 2.1
 Name: insarlite
-Version: 0.0.2
+Version: 0.0.3
 Summary: A GUI package for GMTSAR workflow
-Author-email: Badar Munir <m.b.munir@utwente.nl>
-Project-URL: Homepage, https://github.com/mbadarmunir/InSARLite
-Project-URL: Issues, https://github.com/mbadarmunir/InSARLite/issues
+Home-page: https://github.com/mbadarmunir/InSARLiteApp
+Author: Muhammad Badar Munir
+Author-email: mbadarmunir@gmail.com
+License: MIT
 Classifier: Programming Language :: Python :: 3
-Classifier: License :: OSI Approved :: MIT License
 Classifier: Operating System :: OS Independent
+Classifier: License :: OSI Approved :: MIT License
 Requires-Python: >=3.8
 Description-Content-Type: text/markdown
 License-File: LICENSE
+Requires-Dist: numpy
+Requires-Dist: matplotlib
+Requires-Dist: rioxarray
+Requires-Dist: xarray
+Requires-Dist: h5netcdf
+Requires-Dist: tkcalendar
+Requires-Dist: tkintermapview
+Requires-Dist: requests
+Requires-Dist: beautifulsoup4
+Requires-Dist: pykml
+Requires-Dist: pandas
+Requires-Dist: asf_search
+Requires-Dist: shapely
+Requires-Dist: cartopy
+Requires-Dist: dask
+Requires-Dist: packaging<24.0
+Requires-Dist: Pillow
+Requires-Dist: scipy
+Requires-Dist: lxml
+Requires-Dist: basemap; platform_system != "Windows"
 
-# insarlite
+# InSARLite
 
-To run the GUI as an app from the terminal after installing the package, use:
-
-```bash
-InSARLiteApp
-```
-
-This requires you to define an entry point in your `setup.py` or `pyproject.toml` like:
-
-```python
-# setup.py example
-entry_points={
-    'console_scripts': [
-        'InSARLiteApp=insarlite.main:main',
-    ],
-}
-```
-
-Or in `pyproject.toml` (for setuptools):
-
-```toml
-[project.scripts]
-InSARLiteApp = "insarlite.main:main"
-```
-
-After installation, you can launch the GUI by simply running `InSARLiteApp` in your terminal.
+To run the GUI, Please run following
+import pipeinsar
+pipeinsar.main()

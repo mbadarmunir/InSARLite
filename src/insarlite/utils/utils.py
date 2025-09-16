@@ -53,8 +53,10 @@ def get_kml(indir):
     for root, _, files in os.walk(indir):
         for f in files:            
             if f == 'map-overlay.kml':
-                return os.path.join(root, f)            
-            break
+                kml_path = os.path.join(root, f)                
+                return kml_path
+    return None
+
 
 def get_max_extent_from_kml_coords(coord_strings):
     """
@@ -162,11 +164,14 @@ def extr_ext_TL(folder):
         return None, None
     else:
         for j in safe_dirs:
-            kml = get_kml(j)                        
-            if os.path.isfile(kml):                    
+            kml = get_kml(j)
+            if kml and os.path.isfile(kml):
                 coordinates = parse_kml(kml)
                 if coordinates:
                     all_coords.append(coordinates[0].text.strip())
+            else:
+                print(f"No map-overlay.kml found in {j}, skipping...")
+                print(f"KML path: {kml}")
             # Extract date from directory name (n[17:25] = yyyymmdd)
             n = os.path.basename(j)
             if len(n) >= 25:

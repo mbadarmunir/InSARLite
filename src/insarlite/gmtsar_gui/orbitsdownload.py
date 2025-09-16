@@ -4,7 +4,7 @@ import requests
 import time
 from requests.exceptions import ConnectionError, Timeout
 from datetime import datetime, timedelta
-from utils.utils import read_file_lines, load_config, save_config, create_symlink
+from ..utils.utils import read_file_lines, load_config, save_config, create_symlink
 import keyring
 import getpass
 import tkinter as tk

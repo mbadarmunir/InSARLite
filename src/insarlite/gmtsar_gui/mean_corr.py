@@ -1,6 +1,6 @@
 import os
 import subprocess
-from utils.utils import run_command
+from ..utils.utils import run_command
 
 def get_grd_dimensions(grd_file):
     output = subprocess.check_output(f"gmt grdinfo -C {grd_file}", shell=True).decode().strip()

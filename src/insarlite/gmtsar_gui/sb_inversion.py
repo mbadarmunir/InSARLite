@@ -1,6 +1,6 @@
 import os
 import subprocess
-from utils.utils import run_command
+from ..utils.utils import run_command
 
 def sb_prep(intf, btable, intfdir, uwp):    
     if not os.path.exists('intf.tab') and not os.path.exists('scene.tab'):

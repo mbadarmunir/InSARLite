@@ -1,7 +1,7 @@
 import os
 import shutil
 import subprocess
-from utils.utils import update_console
+from ..utils.utils import update_console
 import sys
 import tkinter as tk
 

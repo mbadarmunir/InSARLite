@@ -5,10 +5,10 @@ import tkinter as tk
 from tkinter import messagebox
 from multiprocessing.pool import ThreadPool
 
-from gmtsar_gui.mask import GrdViewer
-from gmtsar_gui.ref_point import ReferencePointGUI
-from gmtsar_gui.gacos_atm_corr import gacos
-from utils.utils import execute_command
+from ..gmtsar_gui.mask import GrdViewer
+from ..gmtsar_gui.ref_point import ReferencePointGUI
+from ..gmtsar_gui.gacos_atm_corr import gacos
+from ..utils.utils import execute_command
 
 
 class UnwrapApp(tk.Frame):

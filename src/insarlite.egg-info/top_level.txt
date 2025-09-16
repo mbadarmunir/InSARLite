@@ -1,4 +1,1 @@
-__init__
-gmtsar_gui
-InSARLiteApp
-utils
+insarlite

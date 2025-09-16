@@ -1,6 +1,6 @@
 import os
 import glob
-from utils.utils import run_command, create_symlink
+from ..utils.utils import run_command, create_symlink
 
 # indir = psbas, ifall = intfdir
 def velkml(indir, ifall, paths):

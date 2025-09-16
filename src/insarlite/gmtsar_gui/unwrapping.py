@@ -1,6 +1,6 @@
 import os
 from multiprocessing.pool import ThreadPool
-from utils.utils import execute_command, update_console
+from ..utils.utils import execute_command, update_console
 
 
 def unwrap(paths, unwrapping_threshold, ncores, console_text, log_file_path):

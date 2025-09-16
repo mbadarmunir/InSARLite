@@ -1,7 +1,7 @@
 import os
 import sys
 import subprocess
-from utils.utils import run_command
+from ..utils.utils import run_command
 
 def make_dem(west, east, south, north, outdir, mode=1):
     """

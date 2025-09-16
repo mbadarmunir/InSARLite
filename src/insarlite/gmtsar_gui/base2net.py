@@ -6,13 +6,13 @@ from tkinter import messagebox
 # from datetime import datetime, timedelta
 import json
 
-from utils.utils import (
+from ..utils.utils import (
     connect_baseline_nodes,
     interactive_baseline_edges,
     plot_baseline_table,
 )
-from gmtsar_gui.baselines_gen import preprocess
-from gmtsar_gui.masterselection import select_mst
+from ..gmtsar_gui.baselines_gen import preprocess
+from ..gmtsar_gui.masterselection import select_mst
 import shutil
 
 class BaselineGUI:
@@ -535,8 +535,10 @@ class BaselineGUI:
                 self.canvas.delete(e[0])
             self.edges.clear()
             for idx1, idx2 in original_edges:
-                x1, y1, _ = self.points[idx1]
-                x2, y2, _ = self.points[idx2]
+                x1 = self.points[idx1]["x"]
+                y1 = self.points[idx1]["y"]
+                x2 = self.points[idx2]["x"]
+                y2 = self.points[idx2]["y"]
                 line_id = self.canvas.create_line(x1, y1, x2, y2, fill="green", width=2)
                 self.edges.append((line_id, idx1, idx2))
             confirm.destroy()

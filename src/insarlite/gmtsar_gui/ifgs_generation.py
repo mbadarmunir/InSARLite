@@ -1,7 +1,7 @@
 import os
 import subprocess
 from multiprocessing.pool import ThreadPool
-from utils.utils import execute_command, update_console
+from ..utils.utils import execute_command, update_console
 
 
 def gen_ifgs(paths, mst, filter_wavelength, rng, az, ncores, console_text=None, log_file_path=None):

@@ -2,7 +2,7 @@ import subprocess
 import os
 from datetime import datetime, timedelta
 from multiprocessing import Pool
-from utils.utils import create_symlink
+from ..utils.utils import create_symlink
 
 
 def convert_date(code):

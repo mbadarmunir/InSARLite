@@ -1,8 +1,8 @@
 import os
 import subprocess
 import threading
-from utils.utils import update_console, check_align_completion
-from gmtsar_gui.pair_generation import remove_unconnected_images
+from ..utils.utils import update_console, check_align_completion
+from ..gmtsar_gui.pair_generation import remove_unconnected_images
 from concurrent.futures import ThreadPoolExecutor
 
 

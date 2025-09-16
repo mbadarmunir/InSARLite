@@ -6,19 +6,19 @@ import tkinter as tk
 from tkinter import messagebox
 from tkcalendar import DateEntry
 from tkintermapview import TkinterMapView
-from utils.utils import (
+from .utils.utils import (
     browse_folder, browse_file, extr_ext_TL, configure_zooming_ui,
     subset_safe_dirs, submit_gacos_batch, estimate_s1_slc_frames,
     check_align_completion, check_ifgs_completion, check_merge_completion
 )
-from gmtsar_gui.data_dwn import search_sentinel1_acquisitions, download_sentinel1_acquisitions
-from gmtsar_gui.dem_dwn import make_dem
-from gmtsar_gui.structuring import orchestrate_structure_and_copy
-from gmtsar_gui.orbitsdownload import process_files
-from gmtsar_gui.base2net import BaselineGUI
-from gmtsar_gui.align_genIFGs import GenIfg
-from gmtsar_gui.sbas04 import SBASApp
-from gmtsar_gui.unwrap import UnwrapApp
+from .gmtsar_gui.data_dwn import search_sentinel1_acquisitions, download_sentinel1_acquisitions
+from .gmtsar_gui.dem_dwn import make_dem
+from .gmtsar_gui.structuring import orchestrate_structure_and_copy
+from .gmtsar_gui.orbitsdownload import process_files
+from .gmtsar_gui.base2net import BaselineGUI
+from .gmtsar_gui.align_genIFGs import GenIfg
+from .gmtsar_gui.sbas04 import SBASApp
+from .gmtsar_gui.unwrap import UnwrapApp
 import time
 import fnmatch
 import zipfile
@@ -340,7 +340,7 @@ class InSARLiteApp:
         self.w_entry.delete(0, tk.END)
         self.w_entry.insert(0, ext.get("w", ""))
         dates = config.get("dates_entries", {})
-        self.start_var.set(dates.get("starmyt", ""))
+        self.start_var.set(dates.get("start", ""))
         self.end_var.set(dates.get("end", ""))
         if hasattr(self, "pol_var"):
             self.pol_var.set(config.get("polarization", "VV").upper())
@@ -350,9 +350,9 @@ class InSARLiteApp:
             if len(enabled_pols) == 1:
                 pol = enabled_pols[0]
                 ctrl = self.pol_controls[pol]
-            if ctrl and "rb" in ctrl and ctrl["rb"].winfo_exists():
-                ctrl["rb"].config(state="disabled")
-                self.pol_var.set(pol)
+                if ctrl and "rb" in ctrl and ctrl["rb"].winfo_exists():
+                    ctrl["rb"].config(state="disabled")
+                    self.pol_var.set(pol)
             else:
                 for ctrl in self.pol_controls.values():
                     if ctrl and "rb" in ctrl and ctrl["rb"].winfo_exists():
@@ -1832,7 +1832,12 @@ class InSARLiteApp:
 
     def on_next_step(self):        
         outdir = os.path.join(self.output_folder_entry.get().strip(), self.project_name_entry.get().strip())
-        maindir = os.path.join(outdir, os.listdir(outdir)[0])
+        flight_dir = self.flight_dir_var.get().lower()
+        if flight_dir == "descending":
+            xdir = "des"
+        elif flight_dir == "ascending":
+            xdir = "asc"
+        maindir = os.path.join(outdir, xdir)
         def process_files_thread():        
             print(f"Downloading orbit files to {os.path.join(maindir, 'data')}")    
             

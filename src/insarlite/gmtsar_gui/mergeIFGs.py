@@ -3,7 +3,7 @@ import sys
 import shutil
 import subprocess
 import pickle
-from utils.utils import update_console, run_command
+from ..utils.utils import update_console, run_command
 from concurrent.futures import ThreadPoolExecutor
 
 def update_prm(file, param, value):

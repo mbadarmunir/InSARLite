@@ -1,0 +1,22 @@
+numpy
+matplotlib
+rioxarray
+xarray
+h5netcdf
+tkcalendar
+tkintermapview
+requests
+beautifulsoup4
+pykml
+pandas
+asf_search
+shapely
+cartopy
+dask
+packaging<24.0
+Pillow
+scipy
+lxml
+
+[:platform_system != "Windows"]
+basemap

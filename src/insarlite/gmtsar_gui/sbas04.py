@@ -4,8 +4,8 @@ import subprocess
 import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
-from utils.utils import add_tooltip, run_command, projgrd, velkml
-from gmtsar_gui.out_visualize import run_visualize_app
+from ..utils.utils import add_tooltip, run_command, projgrd, velkml
+from ..gmtsar_gui.out_visualize import run_visualize_app
 
 class SBASApp(tk.Frame):
     def __init__(self, parent, paths, ifgsroot, ifgs, gacosdir):

@@ -1,8 +1,8 @@
 import tkinter as tk
-from gmtsar_gui.alignment import align_sec_imgs
-from gmtsar_gui.ifgs_generation import gen_ifgs
-from gmtsar_gui.mergeIFGs import merge_thread
-from gmtsar_gui.mean_corr import create_mean_grd
+from ..gmtsar_gui.alignment import align_sec_imgs
+from ..gmtsar_gui.ifgs_generation import gen_ifgs
+from ..gmtsar_gui.mergeIFGs import merge_thread
+from ..gmtsar_gui.mean_corr import create_mean_grd
 import threading
 from tkinter import messagebox
 import os

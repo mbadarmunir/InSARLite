@@ -1,7 +1,7 @@
 import os
 import shutil
 import subprocess
-from utils.utils import subset_safe_dirs, update_console, create_symlink
+from ..utils.utils import subset_safe_dirs, update_console, create_symlink
 
 """
 This script is used to create a directory structure and copy files appropriately based on user inputs.

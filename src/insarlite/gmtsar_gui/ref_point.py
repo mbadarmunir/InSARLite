@@ -3,7 +3,7 @@ from tkinter import ttk
 from tkintermapview import TkinterMapView
 import os
 import subprocess
-from utils.utils import create_ref_point_ra
+from ..utils.utils import create_ref_point_ra
 
 
 class ReferencePointGUI(tk.Toplevel):
