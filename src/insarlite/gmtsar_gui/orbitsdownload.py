@@ -15,10 +15,6 @@ from tkinter import simpledialog
 url_root = "https://s1qc.asf.alaska.edu/aux_poeorb/"
 data_in_file = "data.in"
 
-# Earthdata credentials (replace with your own credentials)
-# EARTHDATA_USERNAME = "MBadar"
-# EARTHDATA_PASSWORD = "NSFSt3120"
-
 SERVICE_NAME = "EarthdataCredentials"
 
 def get_earthdata_credentials():
