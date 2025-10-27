@@ -1,12 +1,15 @@
 import os
 import subprocess
 from multiprocessing.pool import ThreadPool
-from ..utils.utils import execute_command, update_console
+from ..utils.utils import execute_command, process_logger
 
 
 def gen_ifgs(paths, mst, filter_wavelength, rng, az, ncores, console_text=None, log_file_path=None):
     for key in ["pF1", "pF2", "pF3"]:
         dir_path = paths.get(key)
+        subswath_map = {"pF1": "2.2.1", "pF2": "2.2.2", "pF3": "2.2.3"}
+        process_num = subswath_map.get(key, "2.2.x")
+        process_logger(process_num=process_num, log_file=paths.get("log_file_path"), message=f"Starting IFG generation for subswath {key} (process {process_num})...", mode="start")
         if dir_path and os.path.exists(dir_path):
 
             ind = os.path.join(dir_path, "intf.in")
@@ -36,19 +39,12 @@ def gen_ifgs(paths, mst, filter_wavelength, rng, az, ncores, console_text=None, 
                     if 'threshold_geocode' in line:
                         line = 'threshold_geocode = 0\n'
                     f.write(line)
-            if console_text and log_file_path:
-                update_console(console_text, f"Generating interferograms for {key} ...", log_file_path)
-            else:
-                print(f"Generating interferograms for {key} ...")
+            print(f"Generating interferograms for {key} ...")
             # Checking if first IFG is generated
             intfdir = os.path.join(dir_path, 'intf_all')
-            
-            if console_text and log_file_path:
-                update_console(console_text, 'Cleaning up target directory before generating IFGs', log_file_path)
-            else:
-                print('Cleaning up target directory before generating IFGs')
 
-            if os.path.exists(intfdir):                    
+            print('Cleaning up target directory before generating IFGs')
+            if os.path.exists(intfdir):
                 ld = os.listdir(intfdir)
             else:
                 ld = []
@@ -58,30 +54,23 @@ def gen_ifgs(paths, mst, filter_wavelength, rng, az, ncores, console_text=None, 
                     print('First IFG for {} already generated'.format(os.path.basename(dir_path)))
             else:
                 # Generate IFGs
-                if console_text and log_file_path:
-                    update_console(console_text, 'Generating first interferogram for {} ...'.format(os.path.basename(dir_path)), log_file_path)
-                else:
-                    print('Generating first interferogram for {} ...'.format(os.path.basename(dir_path)))
+                print('Generating first interferogram for {} ...'.format(os.path.basename(dir_path)))
                 subprocess.call('head -1 intf.in>one.in', shell=True)
+                process_logger(process_num=f"{process_num}.1", log_file=paths.get("log_file_path"), message=f"Starting first IFG generation for subswath {key} (process {process_num}.1)...", mode="start")
                 subprocess.call('intf_tops.csh one.in batch_tops.config', shell=True)
+                process_logger(process_num=f"{process_num}.1", log_file=paths.get("log_file_path"), message=f"First IFG generation for subswath {key} (process {process_num}.1) generated successfully.", mode="end")
 
                 fint = os.path.join(intfdir, next(os.walk(intfdir))[1][0], 'phasefilt.grd')
                 
                 if not fint and not os.path.exists(fint):
                     raise RuntimeError('Interferogram generation failed. Please check the log file for more details.')
-                if console_text and log_file_path:
-                    update_console(console_text, "One interferogram for {} generated ".format(os.path.basename(dir_path)), log_file_path)
-                else:
-                    print("One interferogram for {} generated ".format(os.path.basename(dir_path)))
+                print("One interferogram for {} generated ".format(os.path.basename(dir_path)))
 
             if len(ld) > 1 and os.path.exists(os.path.join(intfdir, next(os.walk(intfdir))[1][-1], 'phasefilt.grd')):
                 print('All IFGs for {} are already generated'.format(os.path.basename(dir_path)))
 
             else:
-                if console_text and log_file_path:
-                    update_console(console_text, f'Generating IFGs for {dir_path} ...', log_file_path)
-                else:
-                    print(f'Generating IFGs for {dir_path} ...')
+                print(f'Generating IFGs for {dir_path} ...')
                 # Change proc_stage = 2 in batch_tops.config file
                 with open(con, 'r') as f:
                     lines = f.readlines()
@@ -107,8 +96,10 @@ def gen_ifgs(paths, mst, filter_wavelength, rng, az, ncores, console_text=None, 
                 bash_commands1 = [
                     "intf_tops.csh {} batch_tops.config".format(i) for i in ain1
                 ]
-
+                process_logger(process_num=f"{process_num}.2", log_file=paths.get("log_file_path"), message=f"Starting all IFGs generation for subswath {key} (process {process_num}.2)...", mode="start")
                 # Create a thread pool with a maximum of n threads
                 with ThreadPool(processes=ncores) as pool:
                     # Execute bash commands in parallel
                     pool.map(execute_command, bash_commands1)
+
+                process_logger(process_num=f"{process_num}.2", log_file=paths.get("log_file_path"), message=f"All IFGs generation for subswath {key} (process {process_num}.2) completed successfully.", mode="end")

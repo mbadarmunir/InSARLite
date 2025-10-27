@@ -5,3 +5,66 @@ src/config.json
 src/config_part.json
 imported_libraries.txt
 src/src180625.zip
+
+# Documentation build outputs
+docs/build/
+docs/source/_build/
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# GMT files
+*.history
+gmt.history
+src/gmt.history
+
+# Configuration files with user data
+src/insarlite/config.json
+config.json
+
+# Environment
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Development summaries (moved to dev_summaries folder)
+*_SUMMARY.md
+ENHANCED_PLOTTING_GUIDE.md

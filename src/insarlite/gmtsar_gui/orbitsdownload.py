@@ -4,37 +4,13 @@ import requests
 import time
 from requests.exceptions import ConnectionError, Timeout
 from datetime import datetime, timedelta
-from ..utils.utils import read_file_lines, load_config, save_config, create_symlink
-import keyring
-import getpass
-import tkinter as tk
-from tkinter import simpledialog
+from ..utils.utils import read_file_lines, create_symlink
+from ..utils.earthdata_auth import get_earthdata_session, ensure_earthdata_auth
 
 # Set local directory that stores S1A and S1B orbits
 # orb_dir = "/geosat2/InSAR_Processing/Sentinel_Orbits"
 url_root = "https://s1qc.asf.alaska.edu/aux_poeorb/"
 data_in_file = "data.in"
-
-SERVICE_NAME = "EarthdataCredentials"
-
-def get_earthdata_credentials():
-    username = keyring.get_password(SERVICE_NAME, "username")
-    password = keyring.get_password(SERVICE_NAME, "password")
-    if username is None or password is None:
-        # Pop up a dialog box to get credentials
-        root = tk.Tk()
-        root.withdraw()
-        username = simpledialog.askstring("Earthdata Login", "Enter your Earthdata username:", parent=root)
-        password = simpledialog.askstring("Earthdata Login", "Enter your Earthdata password:", show='*', parent=root)
-        root.destroy()
-        if username and password:
-            keyring.set_password(SERVICE_NAME, "username", username)
-            keyring.set_password(SERVICE_NAME, "password", password)
-        else:
-            raise Exception("Earthdata credentials are required.")
-    return username, password
-
-EARTHDATA_USERNAME, EARTHDATA_PASSWORD = get_earthdata_credentials()
 
 def sort_file_lines(input_file, output_file=None):
     """Sort lines of a text file alphabetically."""
@@ -74,53 +50,58 @@ RETRY_DELAY = 5  # seconds
 
 def download_or_copy_orbit(user_datadir, orb, d):
     """
-    Download or copy the orbit file if not available locally using two-step authentication.
+    Download or copy the orbit file if not available locally using unified EarthData authentication.
     """
     local_orbit_path = os.path.join(user_datadir, orb)    
     if not os.path.exists(local_orbit_path):    
         download_url = url_root + orb
         print(f"Attempting to download {download_url}")
 
-        # Two-step authentication with requests.Session
-        with requests.Session() as session:
-            session.auth = (EARTHDATA_USERNAME, EARTHDATA_PASSWORD)
+        # Ensure EarthData authentication
+        if not ensure_earthdata_auth():
+            raise Exception("Could not authenticate with EarthData")
+        
+        # Get authenticated session
+        session = get_earthdata_session()
 
-            for attempt in range(1, MAX_RETRIES + 1):
-                try:
-                    # Initial request to get redirection URL
-                    r1 = session.get(download_url, timeout=10)
-                    if r1.status_code == 404:
-                        print(f"File not found at {download_url}. Skipping this file.")
-                        return  # Exit the function since file doesn't exist
-
-                    # Check for authentication
-                    if r1.status_code == 401:
-                        print("Authentication required. Redirecting to login...")
-
-                    # Follow the redirection URL and authenticate
-                    r2 = session.get(r1.url, auth=(EARTHDATA_USERNAME, EARTHDATA_PASSWORD), timeout=10)
-
-                    # Verify if the download was successful
-                    if r2.ok:
-                        with open(local_orbit_path, 'wb') as f:
-                            f.write(r2.content)
-                        create_symlink(local_orbit_path, os.path.join(d, os.path.basename(local_orbit_path)))
-                        print(f"Downloaded {orb} successfully.")
-
-                        return  # Exit after a successful download
-                    else:
-                        print(f"Failed to download {download_url}, status code: {r2.status_code}")
-                        break  # Exit loop if status code is not OK and retry won't help
-
-                except (ConnectionError, Timeout) as e:
-                    print(
-                        f"Attempt {attempt} of {MAX_RETRIES}: Connection issue: {e}. Retrying in {RETRY_DELAY} seconds...")
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                # Download using authenticated session
+                print(f"Attempt {attempt}/{MAX_RETRIES}: Downloading {orb}")
+                response = session.get(download_url, timeout=30, stream=True)
+                
+                if response.status_code == 404:
+                    print(f"File not found at {download_url}. Skipping this file.")
+                    return  # Exit the function since file doesn't exist
+                
+                if response.status_code == 200:
+                    # Write the file
+                    with open(local_orbit_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            if chunk:
+                                f.write(chunk)
+                    print(f"✓ Successfully downloaded {orb}")
+                    return
+                else:
+                    print(f"⚠ Download failed with status code: {response.status_code}")
+                    
+            except (ConnectionError, Timeout) as e:
+                print(f"❌ Attempt {attempt} failed: {e}")
+                if attempt < MAX_RETRIES:
+                    print(f"Retrying in {RETRY_DELAY} seconds...")
                     time.sleep(RETRY_DELAY)
-
-            # If all retries failed, print an error message
-            print(f"Failed to download {orb} after {MAX_RETRIES} attempts due to connection issues.")
-    elif os.path.exists(local_orbit_path) and not os.path.exists(os.path.join(d, os.path.basename(local_orbit_path))):
-            create_symlink(local_orbit_path, os.path.join(d, os.path.basename(local_orbit_path)))
+                else:
+                    print(f"❌ Failed to download {orb} after {MAX_RETRIES} attempts")
+                    raise e
+            except Exception as e:
+                print(f"❌ Unexpected error downloading {orb}: {e}")
+                raise e
+    else:
+        print(f"✓ Orbit file {orb} already exists locally")
+        # Create symlink if target doesn't exist
+        target_path = os.path.join(d, os.path.basename(local_orbit_path))
+        if not os.path.exists(target_path):
+            create_symlink(local_orbit_path, target_path)
 
 
 def process_files(user_datadir, proc_dir):

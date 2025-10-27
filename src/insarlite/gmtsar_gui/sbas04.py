@@ -4,11 +4,11 @@ import subprocess
 import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
-from ..utils.utils import add_tooltip, run_command, projgrd, velkml
+from ..utils.utils import add_tooltip, run_command, projgrd, velkml, process_logger
 from ..gmtsar_gui.out_visualize import run_visualize_app
 
 class SBASApp(tk.Frame):
-    def __init__(self, parent, paths, ifgsroot, ifgs, gacosdir):
+    def __init__(self, parent, paths, ifgsroot, ifgs, gacosdir, log_file=None):
         super().__init__(parent)
         parent.title("SBASApp")
         parent.geometry("1200x300")
@@ -16,6 +16,7 @@ class SBASApp(tk.Frame):
         self.ifgsroot = ifgsroot
         self.ifgs = ifgs
         self.gacosdir = gacosdir
+        self.log_file = log_file
         self.topodir = self.ifgsroot if os.path.basename(self.ifgsroot) == "merge" else os.path.join(os.path.dirname(self.ifgsroot), "topo")        
         self.sdir = self.paths.get("psbas")
         self._init_widgets()
@@ -23,10 +24,14 @@ class SBASApp(tk.Frame):
 
     def _init_widgets(self):
         # Incidence angle
-        tk.Label(self, text="Incidence Angle (format: float):").grid(row=0, column=0, padx=10, pady=5, sticky="w")
+        inc_label = tk.Label(self, text="Incidence Angle (format: float):")
+        inc_label.grid(row=0, column=0, padx=10, pady=5, sticky="w")
+        add_tooltip(inc_label, "Radar incidence angle for LOS to vertical conversion")
+        
         self.incidence_angle_entry = tk.Entry(self, width=50)
         self.incidence_angle_entry.grid(row=0, column=1, padx=10, pady=5)
         self.incidence_angle_entry.insert(0, "37")
+        add_tooltip(self.incidence_angle_entry, "Enter incidence angle in degrees\nTypical range for Sentinel-1: 29-46°\nUsed to convert Line-of-Sight measurements to vertical displacement")
 
         # Number of cores
         try:
@@ -35,42 +40,56 @@ class SBASApp(tk.Frame):
         except Exception:
             default_cores = 1
 
-        tk.Label(self, text="Number of cores:").grid(row=0, column=3, padx=10, pady=5)
+        cores_label = tk.Label(self, text="Number of cores:")
+        cores_label.grid(row=0, column=3, padx=10, pady=5)
+        add_tooltip(cores_label, "Number of CPU cores for parallel processing")
 
         self.cores_var = tk.StringVar(value=str(default_cores))
         self.cores_entry = tk.Entry(self, width=10, textvariable=self.cores_var)
         self.cores_entry.grid(row=0, column=4, padx=10, pady=5)
-
+        add_tooltip(self.cores_entry, f"Number of CPU cores to use\nAvailable: {os.cpu_count()}\nMore cores = faster processing")
 
         # SBAS Arguments
-        tk.Label(self, text="SBAS Arguments:").grid(row=1, column=0, padx=10, pady=5, sticky="w")
+        sbas_args_label = tk.Label(self, text="SBAS Arguments:")
+        sbas_args_label.grid(row=1, column=0, padx=10, pady=5, sticky="w")
+        add_tooltip(sbas_args_label, "Additional arguments for SBAS inversion algorithm")
+        
         self.rms_var = tk.BooleanVar(value=True)
         self.dem_var = tk.BooleanVar(value=True)
         sbas_args_frame = tk.Frame(self)
         sbas_args_frame.grid(row=1, column=1, columnspan=3, padx=10, pady=5, sticky="w")
         rms_checkbox = tk.Checkbutton(sbas_args_frame, text="-rms", variable=self.rms_var)
         rms_checkbox.pack(side=tk.LEFT, padx=(0, 10))
-        add_tooltip(rms_checkbox, "Check to calculate RMS of residuals (-rms).")
+        add_tooltip(rms_checkbox, "Calculate Root Mean Square of residuals\nProvides quality assessment of inversion results")
         dem_checkbox = tk.Checkbutton(sbas_args_frame, text="-dem", variable=self.dem_var)
         dem_checkbox.pack(side=tk.LEFT)
-        add_tooltip(dem_checkbox, "Check to generate DEM residual error file in SB inversion (-dem).")
+        add_tooltip(dem_checkbox, "Generate DEM residual error file\nHelps identify systematic DEM errors affecting results")
 
         # Smoothing factor
-        tk.Label(self, text="Smoothing factor:").grid(row=2, column=0, padx=10, pady=5, sticky="w")
+        smooth_label = tk.Label(self, text="Smoothing factor:")
+        smooth_label.grid(row=2, column=0, padx=10, pady=5, sticky="w")
+        add_tooltip(smooth_label, "Spatial smoothing parameter for SBAS inversion")
+        
         self.smooth_var_entry = tk.Entry(self, width=10)
         self.smooth_var_entry.grid(row=2, column=1, padx=10, pady=5, sticky="w")
         self.smooth_var_entry.insert(0, "5.0")
-        add_tooltip(self.smooth_var_entry, "Enter the smoothing factor for the SBAS inversion.\nDefault is 5.0, but you can adjust it based on your data.")
+        add_tooltip(self.smooth_var_entry, "Smoothing factor for SBAS inversion\nHigher values = more smoothing\nTypical range: 1-10\nDefault: 5.0")
 
         # Atmospheric correction iterations
-        tk.Label(self, text="Atmospheric correction iterations:").grid(row=2, column=2, padx=10, pady=5, sticky="w")
+        atm_label = tk.Label(self, text="Atmospheric correction iterations:")
+        atm_label.grid(row=2, column=2, padx=10, pady=5, sticky="w")
+        add_tooltip(atm_label, "Number of iterations for atmospheric phase estimation")
+        
         self.atm_var_entry = tk.Entry(self, width=10)
         self.atm_var_entry.grid(row=2, column=3, padx=10, pady=5, sticky="w")
         self.atm_var_entry.insert(0, "0")
-        add_tooltip(self.atm_var_entry, "Enter the No. of iterations for atm corrections.")
+        add_tooltip(self.atm_var_entry, "Number of atmospheric correction iterations\n0 = no atmospheric correction\n1-3 = typical values for correction")
 
         # SBAS mode selection
-        tk.Label(self, text="SBAS Mode:").grid(row=3, column=0, padx=10, pady=5, sticky="w")
+        sbas_mode_label = tk.Label(self, text="SBAS Mode:")
+        sbas_mode_label.grid(row=3, column=0, padx=10, pady=5, sticky="w")
+        add_tooltip(sbas_mode_label, "SBAS processing mode selection")
+        
         self.sbas_mode_var = tk.StringVar(value="SBAS")
         sbas_mode_dropdown = ttk.Combobox(
             self,
@@ -80,12 +99,17 @@ class SBASApp(tk.Frame):
             width=20
         )
         sbas_mode_dropdown.grid(row=3, column=1, padx=10, pady=5, sticky="w")
+        add_tooltip(sbas_mode_dropdown, "Choose SBAS processing mode:\n• SBAS: Standard sequential processing\n• SBAS Parallel: Multi-threaded processing (faster)")
 
         # Run Button
         run_button = tk.Button(self, text="Run", command=self.run_sbas)
         run_button.grid(row=4, column=0, columnspan=2, padx=10, pady=20, sticky="w")
+        add_tooltip(run_button, "Start SBAS time series inversion\nGenerates velocity and displacement maps\nMay take several minutes to complete")
 
     def run_sbas(self):        
+        # Log the start of SBAS processing
+        if self.log_file:
+            process_logger(process_num=6, log_file=self.log_file, message="Starting SBAS time series analysis...", mode="start")
         
         args = self.get_args()
         inc_angle = args.get("incidence_angle")
@@ -236,6 +260,10 @@ class SBASApp(tk.Frame):
             print('Velocity KML generation completed')
             projgrd(sdir)
             print('Projection completed')
+            
+            # Log completion of SBAS processing
+            if self.log_file:
+                process_logger(process_num=6, log_file=self.log_file, message="SBAS time series analysis completed.", mode="end")
 
 
     def get_args(self):

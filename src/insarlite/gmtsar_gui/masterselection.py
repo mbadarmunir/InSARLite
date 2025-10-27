@@ -3,6 +3,7 @@ import numpy as np
 import asf_search as asf
 from copy import deepcopy
 from datetime import datetime
+from ..utils.earthdata_auth import setup_asf_auth, ensure_earthdata_auth
 
 
 def extract_date(folder_name):
@@ -42,12 +43,47 @@ def calc_center(main_folder):
 
 
 def select_mst(ddata):
+    """
+    Select master scene using ASF search with unified EarthData authentication.
+    """
+    # Ensure EarthData authentication for ASF
+    if not ensure_earthdata_auth():
+        raise Exception("Could not authenticate with EarthData for master selection")
+    
+    # Setup ASF authentication and get credentials
+    if not setup_asf_auth():
+        print("⚠ Warning: Could not setup ASF authentication, continuing anyway...")
 
-
+    # Get authenticated session for ASF
+    from ..utils.earthdata_auth import earthdata_auth
+    session = earthdata_auth.get_authenticated_session()
+    username, password = earthdata_auth.get_credentials()
 
     # Use the super master scene that is just in the middle of the temporal baseline
     granule = [calc_center(ddata).split('.')[0]]
-    results = asf.granule_search(granule)
+    
+    try:
+        # Perform ASF search with authenticated session
+        if username and password:
+            # Set ASF session with authentication
+            asf.ASFSession().auth_with_creds(username, password)
+            results = asf.granule_search(granule)
+        else:
+            # Fallback to basic search
+            results = asf.granule_search(granule)
+        print(f"✓ Successfully found master scene: {granule[0]}")
+        # Continue with baseline analysis instead of returning early
+    except Exception as e:
+        print(f"❌ ASF search failed: {e}")
+        print("This may be due to authentication issues or network connectivity")
+        # Try fallback search without authentication
+        try:
+            print("🔄 Attempting fallback search without authentication...")
+            results = asf.granule_search(granule)
+            print(f"✓ Fallback search successful for: {granule[0]}")
+        except Exception as fallback_e:
+            print(f"❌ Fallback search also failed: {fallback_e}")
+            raise e
 
     reference = results[0]
     stack_org = reference.stack()

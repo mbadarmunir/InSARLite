@@ -1,4 +1,4 @@
 # GMT 6 Session common arguments shelf
 BEGIN GMT 6.5.0
-R	/home/badar/0_PhD/01_data/01_raw/02_InSAR/ISLAM/dem_ortho.grd
+R	/home/badar/0_PhD/01_data/01_raw/02_InSAR/02_Hunza/asc2018/dem_ortho.grd
 END

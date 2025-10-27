@@ -1,3 +1,83 @@
 [build-system]
-requires = ["setuptools<70", "wheel<0.41"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "insarlite"
+version = "1.0.0"
+description = "A comprehensive GUI application for GMTSAR-based InSAR processing"
+readme = "README.md"
+license = "MIT"
+authors = [{name = "Muhammad Badar Munir", email = "mbadarmunir@gmail.com"}]
+maintainers = [{name = "Muhammad Badar Munir", email = "mbadarmunir@gmail.com"}]
+keywords = ["InSAR", "SAR", "interferometry", "GMTSAR", "Sentinel-1", "remote sensing", "geodesy"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Education",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "numpy>=1.20.0",
+    "matplotlib>=3.3.0",
+    "rioxarray>=0.11.0",
+    "xarray>=0.18.0",
+    "h5netcdf>=0.11.0",
+    "tkcalendar>=1.6.0",
+    "tkintermapview>=1.20",
+    "requests>=2.25.0",
+    "beautifulsoup4>=4.9.0",
+    "pykml>=0.2.0",
+    "pandas>=1.3.0",
+    "asf_search>=6.0.0",
+    "shapely>=1.7.0",
+    "cartopy>=0.20.0",
+    "dask>=2021.6.0",
+    "packaging>=20.0,<24.0",
+    "Pillow>=8.0.0",
+    "scipy>=1.7.0",
+    "lxml>=4.6.0",
+    "basemap>=1.3.0; platform_system != 'Windows'",
+]
+
+[project.optional-dependencies]
+docs = [
+    "sphinx>=4.0.0",
+    "sphinx-rtd-theme>=1.0.0",
+    "myst-parser>=0.18.0",
+    "nbsphinx>=0.8.0",
+    "sphinx-autodoc-typehints>=1.19.0",
+    "sphinx-copybutton>=0.5.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=22.0.0",
+    "isort>=5.10.0",
+    "flake8>=5.0.0",
+    "mypy>=0.991",
+]
+
+[project.urls]
+Homepage = "https://github.com/mbadarmunir/InSARLite"
+Documentation = "https://insarlite.readthedocs.io/"
+Repository = "https://github.com/mbadarmunir/InSARLite"
+"Bug Tracker" = "https://github.com/mbadarmunir/InSARLite/issues"
+
+[project.scripts]
+InSARLiteApp = "insarlite.main:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

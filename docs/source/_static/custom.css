@@ -1,0 +1,45 @@
+/* Custom CSS for InSARLite Documentation */
+
+/* Code blocks styling */
+.highlight {
+    margin: 1em 0;
+}
+
+/* Admonition styling */
+.admonition {
+    margin: 1em 0;
+}
+
+/* Table styling */
+table.docutils {
+    border-collapse: collapse;
+    margin: 1em 0;
+}
+
+table.docutils th,
+table.docutils td {
+    border: 1px solid #ddd;
+    padding: 8px;
+}
+
+table.docutils th {
+    background-color: #f8f9fa;
+    font-weight: bold;
+}
+
+/* Logo and branding */
+.sidebar-logo img {
+    max-width: 200px;
+    height: auto;
+}
+
+/* Navigation styling */
+.toctree-wrapper ul {
+    margin: 0;
+    padding-left: 1.5em;
+}
+
+/* Code highlighting improvements */
+.highlight .k { color: #0000ff; }  /* Keywords */
+.highlight .s { color: #008000; }  /* Strings */
+.highlight .c { color: #808080; }  /* Comments */

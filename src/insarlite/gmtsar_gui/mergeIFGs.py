@@ -1,10 +1,8 @@
 import os
-import sys
 import shutil
 import subprocess
-import pickle
-from ..utils.utils import update_console, run_command
-from concurrent.futures import ThreadPoolExecutor
+from ..utils.utils import process_logger
+
 
 def update_prm(file, param, value):
     """Update a parameter in a PRM file."""
@@ -66,11 +64,11 @@ def get_first_two_files(path):
     except IndexError:
         return None, None, None
 
-def merge_thread(pmerge, ncores, mst=None):        
+def merge_thread(pmerge, log_file_path, mst=None):        
     if pmerge and os.path.exists(pmerge):      
 
         print("Merging interferograms ...")
-        print(f"The current release will ignore defined {ncores} cores and utilize all available cores for merging")
+        # print(f"The current release will ignore defined {ncores} cores and utilize all available cores for merging")
         os.chdir(pmerge)
 
         dir_path = '..'
@@ -103,6 +101,8 @@ def merge_thread(pmerge, ncores, mst=None):
             if os.path.exists('batch_tops.config'):
                 os.remove('batch_tops.config')
                 shutil.copy(f"{dir_path}/F2/batch_tops.config", 'batch_tops.config')
-            subprocess.call('merge_batch_parallel.sh merge_list batch_tops.config', shell=True)
+            process_logger(process_num="2.3", log_file=log_file_path, message=f"Starting merging process...", mode="start")
+            subprocess.call('merge_batch.csh merge_list batch_tops.config', shell=True)
+            process_logger(process_num="2.3", log_file=log_file_path, message=f"Merging process completed...", mode="end")
 
         print("Interferograms merged ...")

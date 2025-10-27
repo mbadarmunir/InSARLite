@@ -9,30 +9,96 @@ from tkinter import filedialog, messagebox, font
 from pykml import parser
 from datetime import datetime, timedelta
 import math
-import base64
+# import base64
 import requests
-from urllib.parse import quote_plus
-from bs4 import BeautifulSoup
+# from urllib.parse import quote_plus
+# from bs4 import BeautifulSoup
 import time
 import numpy as np
+import glob
 
 
 
-CONFIG_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.json")
-CONFIG_FILE_PART = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config_part.json")
+# CONFIG_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.json")
+# CONFIG_FILE_PART = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config_part.json")
 
 # Function to run commands in parallel
-def execute_command(command):
+def execute_command(command, log_func=None, process_num=None):
     # Execute bash command
-    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     output, error = process.communicate()
+    if log_func:
+        log_func(message=output, process_num=process_num)
+        if error:
+            log_func(message=error, process_num=process_num)
     return {'command': command, 'output': output, 'error': error}
 
-def run_command(command):
+# Function to run a shell command and capture its output
+def run_command(command, log_func=None, process_num=None):
     result = subprocess.run(command, shell=True, capture_output=True, text=True)
+    if log_func:
+        log_func(message=result.stdout, process_num=process_num)
+        if result.stderr:
+            log_func(message=result.stderr, process_num=process_num)
     if result.returncode != 0:
         print(result.stderr)
     return result.stdout.strip()
+
+# Function to log messages to a log file
+def log_message(log_file_path, message):
+    with open(log_file_path, "a") as log_file:
+        log_file.write(message + "\n")
+
+# Enhanced process logger
+def process_logger(
+    message=None,
+    process_num=None,
+    mode="none",  # "start", "end", or "none"
+    log_file=None
+):
+    """
+    Logs and prints process messages with optional timing.
+
+    Args:
+        message (str): Message to log/print.
+        process_num (str|int): Process number (e.g., 1, 4, 4.2.2).
+        mode (str): "start", "end", or "none" for process timing.
+        log_file (str): Full path to log file. Log file management is external.
+    """
+    # Static dict to store process start times
+    if not hasattr(process_logger, "_state"):
+        process_logger._state = {"start_times": {}}
+    state = process_logger._state
+
+    now = datetime.now()
+    timestamp = now.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+
+    if process_num and mode == "start":
+        state["start_times"][str(process_num)] = now
+        msg = f"Process-{process_num}: {message or ''} started at {timestamp}"
+        print(msg)
+        if log_file:
+            log_message(log_file, msg)
+        return
+
+    if process_num and mode == "end":
+        start_time = state["start_times"].get(str(process_num))
+        if start_time:
+            elapsed = (now - start_time).total_seconds()
+            elapsed_str = format_time(elapsed)
+            msg = f"Process-{process_num}: {message or ''} ended at {timestamp} (Duration: {elapsed_str})"
+        else:
+            msg = f"Process-{process_num}: {message or ''} ended at {timestamp} (Duration: unknown)"
+        print(msg)
+        if log_file:
+            log_message(log_file, msg)
+        return
+
+    # Generic message (no process_num or just intermediate output)
+    msg = message or ""
+    print(msg)
+    if log_file:
+        log_message(log_file, msg)
 
 def parse_kml(kml_file):
     # Parse the KML file
@@ -189,23 +255,6 @@ def extr_ext_TL(folder):
     return max_bounds, sdate, edate, fdirection
 
 
-def toggle_gacos_folder(atm_option, folder2_entry, browse_button3):
-    """
-    Enable or disable folder2_entry and browse_button3 based on the selected atmospheric correction option.
-
-    Args:
-        atm_option (tk.StringVar): The StringVar containing the selected option.
-        folder2_entry (tk.Entry): The Entry widget for the GACOS folder.
-        browse_button3 (tk.Button): The Browse button for the GACOS folder.
-    """
-    if atm_option.get() == "GACOS Atmospheric correction":
-        folder2_entry.config(state="normal")
-        browse_button3.config(state="normal")
-    else:
-        folder2_entry.config(state="disabled")
-        browse_button3.config(state="disabled")
-
-
 # Function to format time output
 def format_time(seconds):
     days, remainder = divmod(seconds, 86400)
@@ -228,54 +277,51 @@ def format_time(seconds):
     return " ".join(parts)
 
 
-# Function to exit the program on specified condition if false
-def exitGUI(root, condition, message="Critical Error. Exiting..."):
-    """
-    Displays a pop-up message, closes the GUI, and exits the program if the condition is not met.
+# # Function to exit the program on specified condition if false
+# def exitGUI(root, condition, message="Critical Error. Exiting..."):
+#     """
+#     Displays a pop-up message, closes the GUI, and exits the program if the condition is not met.
 
-    Parameters:
-    root (Tk): The root Tkinter window object.
-    condition (bool): The condition to check. If False, the program will exit.
-    message (str): Optional. Message to display in the pop-up before exiting.
-    """
-    if not condition:
-        # Show the pop-up message
-        messagebox.showerror("Error", message)
+#     Parameters:
+#     root (Tk): The root Tkinter window object.
+#     condition (bool): The condition to check. If False, the program will exit.
+#     message (str): Optional. Message to display in the pop-up before exiting.
+#     """
+#     if not condition:
+#         # Show the pop-up message
+#         messagebox.showerror("Error", message)
 
-        # Close the Tkinter window
-        root.destroy()
+#         # Close the Tkinter window
+#         root.destroy()
 
-        # Exit the entire program
-        sys.exit()
+#         # Exit the entire program
+#         sys.exit()
 
 
-# Function to log messages to a log file
-def log_message(log_file_path, message):
-    with open(log_file_path, "a") as log_file:
-        log_file.write(message + "\n")
+
 
 
 # Function to log messages with timing details
-def update_console(console_text=None, message="", log_file_path=None):
-    # Convert message to string or JSON-formatted string if it's a dictionary
-    if isinstance(message, dict):
-        message = json.dumps(message, indent=4)
-    else:
-        message = str(message)
+# def update_console(console_text=None, message="", log_file_path=None):
+#     # Convert message to string or JSON-formatted string if it's a dictionary
+#     if isinstance(message, dict):
+#         message = json.dumps(message, indent=4)
+#     else:
+#         message = str(message)
 
-    # Log the message if log_file_path is provided
-    if log_file_path:
-        log_message(log_file_path, message)
+#     # Log the message if log_file_path is provided
+#     if log_file_path:
+#         log_message(log_file_path, message)
 
-    # Update the console if console_text is provided
-    if console_text:
-        console_text.config(state=tk.NORMAL)
-        console_text.insert(tk.END, message + "\n")
-        console_text.config(state=tk.DISABLED)
-        console_text.see(tk.END)
-    else:
-        # If no console_text is provided, print the message
-        print(message)
+#     # Update the console if console_text is provided
+#     if console_text:
+#         console_text.config(state=tk.NORMAL)
+#         console_text.insert(tk.END, message + "\n")
+#         console_text.config(state=tk.DISABLED)
+#         console_text.see(tk.END)
+#     else:
+#         # If no console_text is provided, print the message
+#         print(message)
 
 def browse_file(entry_widget, key, file_types):
     """Browse for a file and insert the path into the entry widget."""
@@ -284,7 +330,7 @@ def browse_file(entry_widget, key, file_types):
     if filepath:
         entry_widget.delete(0, "end")
         entry_widget.insert(0, filepath)
-        update_last_dir(key, filepath)
+        # update_last_dir(key, filepath)
 
 
 def browse_folder(entry_widget, key=None):
@@ -294,48 +340,9 @@ def browse_folder(entry_widget, key=None):
     if folder_path:
         entry_widget.delete(0, "end")
         entry_widget.insert(0, folder_path)
-        if key:
-            update_last_dir(key, folder_path)
+        # if key:
+            # update_last_dir(key, folder_path)
 
-def load_config():
-    """Load configuration from JSON file."""
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r") as f:
-            return json.load(f)
-    return {}
-
-def load_config_part():
-    """Load configuration from JSON file."""
-    if os.path.exists(CONFIG_FILE_PART):
-        with open(CONFIG_FILE_PART, "r") as f:
-            return json.load(f)
-    return {}
-
-def save_config(config):
-    """Save configuration to JSON file."""
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(config, f, indent=4)
-
-def save_config_part(config):
-    """Save/update configuration to JSON file, keeping existing values intact."""
-    if os.path.exists(CONFIG_FILE_PART):
-        with open(CONFIG_FILE_PART, "r") as f:
-            existing_config = json.load(f)
-    else:
-        existing_config = {}
-
-    # Update existing config with new values
-    existing_config.update(config)
-
-    with open(CONFIG_FILE_PART, "w") as f:
-        json.dump(existing_config, f, indent=4)
-    
-
-def update_last_dir(key, path):
-    """Update the last opened directory for a specific key."""
-    config = load_config()
-    config[key] = path
-    save_config(config)
 
 def configure_zooming_ui(root, min_font=8, max_font=50):
     def update_font_size(size):
@@ -423,44 +430,200 @@ def create_symlink(src, dest):
         except Exception as e:
             print(f"Failed to create symbolic link: {e}")
 
-def rm_symlink(file):
-    if os.path.islink(file):
-        os.unlink(file)
+# def rm_symlink(file):
+#     if os.path.islink(file):
+#         os.unlink(file)
 
 class ToolTip:
-    def __init__(self, widget, text):
+    # Class variable to track all active tooltips
+    _active_tooltips = []
+    
+    def __init__(self, widget, text, delay=500, wraplength=300):
         self.widget = widget
         self.text = text
+        self.delay = delay
+        self.wraplength = wraplength
         self.tip_window = None
-        self.widget.bind("<Enter>", self.show_tip)
-        self.widget.bind("<Leave>", self.hide_tip)
+        self.id = None
+        self.widget.bind("<Enter>", self.on_enter)
+        self.widget.bind("<Leave>", self.on_leave)
+        self.widget.bind("<ButtonPress>", self.on_leave)
+
+    def on_enter(self, event=None):
+        self.schedule()
+
+    def on_leave(self, event=None):
+        self.unschedule()
+        self.hide_tip()
+
+    def schedule(self):
+        self.unschedule()
+        self.id = self.widget.after(self.delay, self.show_tip)
+
+    def unschedule(self):
+        if self.id:
+            self.widget.after_cancel(self.id)
+            self.id = None
 
     def show_tip(self, event=None):
         if self.tip_window or not self.text:
             return
+        
+        # Get widget position
         x = self.widget.winfo_rootx() + 20
         y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5
+        
+        # Create tooltip window
         self.tip_window = tw = tk.Toplevel(self.widget)
         tw.wm_overrideredirect(True)
-        tw.wm_geometry(f"+{x}+{y}")
+        
+        # Configure tooltip appearance
         label = tk.Label(
-            tw, text=self.text,
+            tw, 
+            text=self.text,
             background="#ffffe0",
+            foreground="#000000",
             relief=tk.SOLID,
             borderwidth=1,
-            font=("tahoma", 10),
-            anchor="w",              # Left align text
-            justify="left"           # Left justify multi-line text
+            font=("TkDefaultFont", 9),
+            anchor="w",
+            justify="left",
+            wraplength=self.wraplength,
+            padx=6,
+            pady=4
         )
         label.pack(ipadx=1)
+        
+        # Update to get actual dimensions
+        tw.update_idletasks()
+        tooltip_width = tw.winfo_reqwidth()
+        tooltip_height = tw.winfo_reqheight()
+        
+        # Adjust position to avoid screen edges
+        screen_width = tw.winfo_screenwidth()
+        screen_height = tw.winfo_screenheight()
+        
+        # Adjust x position if off screen
+        if x + tooltip_width > screen_width:
+            x = screen_width - tooltip_width - 10
+        
+        # Adjust y position if off screen
+        if y + tooltip_height > screen_height:
+            y = self.widget.winfo_rooty() - tooltip_height - 5
+        
+        # Check for overlaps with existing tooltips and adjust position
+        x, y = self._find_non_overlapping_position(x, y, tooltip_width, tooltip_height)
+        
+        # Set final position
+        tw.wm_geometry(f"+{x}+{y}")
+        
+        # Add this tooltip to the active list
+        ToolTip._active_tooltips.append({
+            'window': tw,
+            'x': x,
+            'y': y,
+            'width': tooltip_width,
+            'height': tooltip_height,
+            'instance': self
+        })
+
+    def _find_non_overlapping_position(self, x, y, width, height):
+        """Find a position that doesn't overlap with existing tooltips"""
+        original_x, original_y = x, y
+        
+        # Clean up any dead tooltips from the active list
+        ToolTip._active_tooltips = [
+            tip for tip in ToolTip._active_tooltips 
+            if tip['window'].winfo_exists() and tip['instance'] != self
+        ]
+        
+        # If no other tooltips, use original position
+        if not ToolTip._active_tooltips:
+            return x, y
+        
+        # Try to find a non-overlapping position
+        max_attempts = 20
+        attempt = 0
+        
+        while attempt < max_attempts:
+            overlapping = False
+            
+            for existing_tip in ToolTip._active_tooltips:
+                if self._rectangles_overlap(
+                    x, y, width, height,
+                    existing_tip['x'], existing_tip['y'], 
+                    existing_tip['width'], existing_tip['height']
+                ):
+                    overlapping = True
+                    break
+            
+            if not overlapping:
+                return x, y
+            
+            # Try different positions
+            if attempt < 5:
+                # Try moving right
+                x = original_x + (attempt + 1) * 20
+            elif attempt < 10:
+                # Try moving left
+                x = original_x - (attempt - 4) * 20
+            elif attempt < 15:
+                # Try moving down
+                x = original_x
+                y = original_y + (attempt - 9) * 30
+            else:
+                # Try moving up
+                x = original_x
+                y = original_y - (attempt - 14) * 30
+            
+            # Ensure we don't go off screen
+            screen_width = self.widget.winfo_screenwidth()
+            screen_height = self.widget.winfo_screenheight()
+            
+            if x + width > screen_width:
+                x = screen_width - width - 10
+            if x < 10:
+                x = 10
+            if y + height > screen_height:
+                y = screen_height - height - 10
+            if y < 10:
+                y = 10
+            
+            attempt += 1
+        
+        # If we couldn't find a good position, return original
+        return original_x, original_y
+
+    def _rectangles_overlap(self, x1, y1, w1, h1, x2, y2, w2, h2):
+        """Check if two rectangles overlap with a small margin"""
+        margin = 10  # Add margin to prevent tooltips from being too close
+        return not (x1 + w1 + margin < x2 or 
+                   x2 + w2 + margin < x1 or 
+                   y1 + h1 + margin < y2 or 
+                   y2 + h2 + margin < y1)
 
     def hide_tip(self, event=None):
         if self.tip_window:
+            # Remove from active tooltips list
+            ToolTip._active_tooltips = [
+                tip for tip in ToolTip._active_tooltips 
+                if tip['instance'] != self
+            ]
+            
             self.tip_window.destroy()
             self.tip_window = None
 
-def add_tooltip(widget, text):
-    ToolTip(widget, text)
+def add_tooltip(widget, text, delay=500, wraplength=300):
+    """
+    Add a tooltip to a widget.
+    
+    Args:
+        widget: The tkinter widget to add the tooltip to
+        text: The tooltip text to display
+        delay: Delay in milliseconds before showing tooltip (default: 500)
+        wraplength: Maximum width of tooltip text in pixels (default: 300)
+    """
+    ToolTip(widget, text, delay, wraplength)
 
 #######################################################################################################
 ################ Functions to prepare and submit GACOS atmospheric correction requests ################
@@ -1101,3 +1264,134 @@ def projgrd(indir):
     for i in range(0, len(grds)):
         print(f'{i} Projecting {os.path.basename(grds[i])}')
         run_command(f'proj_ra2ll.csh trans.dat {grds[i]} {grdsout[i]}')
+
+
+def parse_manifest_safe_flight_direction(manifest_path):
+    """
+    Parse manifest.safe file to extract flight direction.
+    
+    Args:
+        manifest_path (str): Path to manifest.safe file
+        
+    Returns:
+        str: Flight direction ('ASCENDING' or 'DESCENDING') or None if not found
+    """
+    try:
+        import xml.etree.ElementTree as ET
+        
+        tree = ET.parse(manifest_path)
+        root = tree.getroot()
+        
+        # Look for the <s1:pass> element in the XML
+        # The namespace might vary, so we'll search more broadly
+        for elem in root.iter():
+            if elem.tag.endswith('}pass') or elem.tag == 'pass':
+                pass_value = elem.text
+                if pass_value:
+                    return pass_value.upper()
+        
+        # Alternative approach: search for 'pass' in the XML text
+        with open(manifest_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            # Look for <s1:pass>DESCENDING</s1:pass> or similar
+            import re
+            match = re.search(r'<[^>]*:?pass[^>]*>([^<]+)</[^>]*:?pass[^>]*>', content, re.IGNORECASE)
+            if match:
+                return match.group(1).strip().upper()
+                
+        return None
+        
+    except Exception as e:
+        print(f"Error parsing manifest.safe file {manifest_path}: {e}")
+        return None
+
+
+def extract_flight_direction_from_zip(zip_path):
+    """
+    Extract flight direction from manifest.safe inside a ZIP file.
+    
+    Args:
+        zip_path (str): Path to ZIP file
+        
+    Returns:
+        str: Flight direction ('ASCENDING' or 'DESCENDING') or None if not found
+    """
+    try:
+        import zipfile
+        import tempfile
+        
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            # Look for manifest.safe file in the ZIP
+            manifest_files = [name for name in zf.namelist() if name.endswith('manifest.safe')]
+            
+            if not manifest_files:
+                return None
+                
+            # Use the first manifest.safe found
+            manifest_file = manifest_files[0]
+            
+            # Extract to temporary file and parse
+            with tempfile.NamedTemporaryFile(mode='w+b', suffix='.xml', delete=False) as temp_file:
+                temp_file.write(zf.read(manifest_file))
+                temp_file.flush()
+                
+                try:
+                    return parse_manifest_safe_flight_direction(temp_file.name)
+                finally:
+                    os.unlink(temp_file.name)
+                    
+    except Exception as e:
+        print(f"Error extracting flight direction from ZIP {zip_path}: {e}")
+        return None
+
+
+def analyze_flight_directions(safe_dirs, zip_files):
+    """
+    Analyze flight directions from SAFE directories and ZIP files.
+    
+    Args:
+        safe_dirs (list): List of SAFE directory paths
+        zip_files (list): List of ZIP file paths
+        
+    Returns:
+        dict: Analysis results with keys:
+            - 'directions': set of unique directions found
+            - 'uniform': bool indicating if all directions are the same
+            - 'direction': the uniform direction if uniform, else None
+            - 'details': list of (file_path, direction) tuples
+    """
+    directions_found = set()
+    details = []
+    
+    # Process SAFE directories
+    for safe_dir in safe_dirs or []:
+        manifest_path = os.path.join(safe_dir, 'manifest.safe')
+        if os.path.exists(manifest_path):
+            direction = parse_manifest_safe_flight_direction(manifest_path)
+            if direction:
+                directions_found.add(direction)
+                details.append((safe_dir, direction))
+            else:
+                details.append((safe_dir, 'UNKNOWN'))
+        else:
+            details.append((safe_dir, 'NO_MANIFEST'))
+    
+    # Process ZIP files
+    for zip_file in zip_files or []:
+        direction = extract_flight_direction_from_zip(zip_file)
+        if direction:
+            directions_found.add(direction)
+            details.append((zip_file, direction))
+        else:
+            details.append((zip_file, 'UNKNOWN'))
+    
+    # Determine if all directions are uniform
+    uniform = len(directions_found) == 1
+    direction = list(directions_found)[0] if uniform else None
+    
+    return {
+        'directions': directions_found,
+        'uniform': uniform,
+        'direction': direction,
+        'details': details
+    }

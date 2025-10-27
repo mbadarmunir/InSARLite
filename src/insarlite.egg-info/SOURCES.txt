@@ -3,6 +3,7 @@ README.md
 pyproject.toml
 setup.cfg
 src/insarlite/__init__.py
+src/insarlite/__main__.py
 src/insarlite/main.py
 src/insarlite.egg-info/PKG-INFO
 src/insarlite.egg-info/SOURCES.txt
@@ -34,4 +35,13 @@ src/insarlite/gmtsar_gui/structuring.py
 src/insarlite/gmtsar_gui/unwrap.py
 src/insarlite/gmtsar_gui/unwrapping.py
 src/insarlite/utils/__init__.py
+src/insarlite/utils/config_manager.py
+src/insarlite/utils/control_manager.py
+src/insarlite/utils/data_handlers.py
+src/insarlite/utils/earthdata_auth.py
+src/insarlite/utils/file_operations.py
+src/insarlite/utils/gmtsar_installer.py
+src/insarlite/utils/gui_helpers.py
+src/insarlite/utils/matplotlib_baseline_plotter.py
+src/insarlite/utils/ui_factory.py
 src/insarlite/utils/utils.py

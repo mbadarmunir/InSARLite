@@ -1,7 +1,6 @@
 import os
 import shutil
 import subprocess
-from ..utils.utils import update_console
 import sys
 import tkinter as tk
 
@@ -59,7 +58,7 @@ def gen_pairs(paths, parallel_baseline, perpendicular_baseline, console_text, lo
             dind = os.path.join(dir_path, "raw", "data.in")
             if not os.path.exists(ind):
                 os.chdir(dir_path)
-                update_console(console_text, f"Starting IFGs pairs selection {key}...", log_file_path)
+                print(f"Starting IFGs pairs selection {key}...")
                 subprocess.call('select_pairs.csh baseline_table.dat {} {}'.format(parallel_baseline, perpendicular_baseline), shell=True)
                 
                 # Copy the generated intf.in file to other paths

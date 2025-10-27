@@ -18,10 +18,12 @@ from asf_search.constants import INTERNAL
 import threading
 from concurrent.futures import ThreadPoolExecutor
 import time
+from ..utils.earthdata_auth import setup_asf_auth, ensure_earthdata_auth, get_earthdata_session
 
 def search_sentinel1_acquisitions(aoi_wkt, start_date, end_date, orbit_dir):
     """
-    Search Sentinel-1 SLC acquisitions for a given AOI, date range, and orbit direction.
+    Search Sentinel-1 SLC acquisitions for a given AOI, date range, and orbit direction
+    using unified EarthData authentication.
 
     Args:
         aoi_wkt (str): AOI in WKT format.
@@ -30,24 +32,43 @@ def search_sentinel1_acquisitions(aoi_wkt, start_date, end_date, orbit_dir):
         orbit_dir (str): 'ASCENDING' or 'DESCENDING'.
 
     Returns:
-        list of dict: Each dict contains 'path', 'frame', 'num_acquisitions', 'geometry', 'percent_coverage', 'urls'
+        dict: Dictionary with (path, frame) as keys and lists of (date, url, size) as values.
     """
-    INTERNAL.CMR_TIMEOUT = 120
+    # Ensure EarthData authentication for ASF search
+    if not ensure_earthdata_auth():
+        raise Exception("Could not authenticate with EarthData for Sentinel-1 search")
+    
+    # Setup ASF authentication
+    if not setup_asf_auth():
+        print("⚠ Warning: Could not setup ASF authentication, continuing anyway...")
 
     try:
+        query_end_date = end_date
+        if end_date == 'today':
+            query_end_date = datetime.today().strftime('%Y-%m-%d')
+    except Exception:
+        query_end_date = end_date  # Fallback if date parsing fails
+
+    try:
+        print(f"🔍 Searching Sentinel-1 data for {orbit_dir.upper()} orbit...")
         results = asf.geo_search(
             platform=asf.PLATFORM.SENTINEL1,
             processingLevel=asf.PRODUCT_TYPE.SLC,
             beamMode=asf.BEAMMODE.IW,
             intersectsWith=aoi_wkt,
             start=start_date,
-            end=end_date,
+            end=query_end_date,
             flightDirection=orbit_dir.upper(),
             maxResults=10000,
         )
+        print(f"✓ Found {len(results)} Sentinel-1 acquisitions")
     except asf.ASFSearchError as e:
-        print(f"ASF Search Error: {e}")
-        return []
+        print(f"❌ ASF Search Error: {e}")
+        print("This may be due to authentication issues or network connectivity")
+        return {}
+    except Exception as e:
+        print(f"❌ Unexpected search error: {e}")
+        return {}
     frame_dict = defaultdict(list)
     geometry_dict = {}
     size_dict = defaultdict(int)
@@ -61,7 +82,7 @@ def search_sentinel1_acquisitions(aoi_wkt, start_date, end_date, orbit_dir):
         url = props.get("url", getattr(result, "download_url", None))
         if path is not None and frame is not None:
             key = (path, frame)
-            frame_dict[key].append((acq_date, url))
+            frame_dict[key].append((acq_date, url, size))  # Include size for each file
             if url:  # Only add size if URL is valid (i.e., acquisition is downloadable)
                 size_dict[key] += size
             if key not in geometry_dict:
@@ -69,9 +90,10 @@ def search_sentinel1_acquisitions(aoi_wkt, start_date, end_date, orbit_dir):
 
     aoi_geom = wkt_loads(aoi_wkt)
     summary = []
-    for (path, frame), date_url_list in frame_dict.items():
-        unique_dates = set(date for date, _ in date_url_list)
-        urls = [url for _, url in date_url_list if url]
+    for (path, frame), date_url_size_list in frame_dict.items():
+        unique_dates = set(date for date, _, _ in date_url_size_list)
+        # Create list of (url, size) tuples for files with valid URLs
+        files_info = [(url, size) for _, url, size in date_url_size_list if url]
         geom = shape(geometry_dict[(path, frame)])
         intersection = aoi_geom.intersection(geom)
         percent_coverage = (intersection.area / aoi_geom.area) * 100 if aoi_geom.area > 0 else 0
@@ -81,7 +103,8 @@ def search_sentinel1_acquisitions(aoi_wkt, start_date, end_date, orbit_dir):
             "num_acquisitions": len(unique_dates),
             "geometry": geometry_dict[(path, frame)],
             "percent_coverage": percent_coverage,
-            "urls": urls,
+            "urls": [url for url, _ in files_info],  # Keep backward compatibility
+            "files_info": files_info,  # New: list of (url, size) tuples
             "total_expected_size": size_dict[(path, frame)],
         })
 
@@ -93,244 +116,252 @@ def search_sentinel1_acquisitions(aoi_wkt, start_date, end_date, orbit_dir):
         
     return summary
 
-def download_sentinel1_acquisitions(urls, outputdir, total_expected_size,
+def download_sentinel1_acquisitions(files_info, outputdir, total_expected_size,
                                     progress_callback=None,
                                     pause_event=None):
     """
-    Download all Sentinel-1 acquisitions from the provided list of URLs using Earthdata authentication.
+    Download all Sentinel-1 acquisitions using unified EarthData authentication.
 
     Args:
-        urls (list): List of download URLs.
+        files_info (list): List of (url, expected_size) tuples.
         outputdir (str): Directory to save downloaded files.
+        total_expected_size (int): Total expected download size in bytes.
+        progress_callback (callable): Callback function for progress updates.
+        pause_event (threading.Event): Event to pause downloads.
     """
-    cookie_jar_path = os.path.join(os.path.expanduser('~'), ".bulk_download_cookiejar.txt")
-    cookie_jar = MozillaCookieJar()
-
-    def check_cookie():
-        if not cookie_jar:
-            return False
-        file_check = 'https://urs.earthdata.nasa.gov/profile'
-        opener = build_opener(
-            HTTPCookieProcessor(cookie_jar),
-            HTTPHandler(),
-            HTTPSHandler()
-        )
-        install_opener(opener)
-        request = Request(file_check)
-        request.get_method = lambda: 'HEAD'
-        try:
-            response = urlopen(request, timeout=30)
-            if response.getcode() in (200, 307):
-                cookie_jar.save(cookie_jar_path)
-                return True
-        except Exception:
-            return False
-        return False
-
-    def get_cookie():
-        if os.path.isfile(cookie_jar_path):
-            cookie_jar.load(cookie_jar_path)
-            if check_cookie():
-                print(" > Reusing previous cookie jar.")
-                return
-            else:
-                print(" > Could not validate old cookie jar")
-        print("No existing URS cookie found, please enter Earthdata username & password:")
-        while not check_cookie():
-            class LoginDialog(simpledialog.Dialog):
-                def body(self, master):
-                    tk.Label(master, text="Username:").grid(row=0, sticky="e")
-                    tk.Label(master, text="Password:").grid(row=1, sticky="e")
-                    self.username_entry = tk.Entry(master)
-                    self.password_entry = tk.Entry(master, show="*")
-                    self.username_entry.grid(row=0, column=1)
-                    self.password_entry.grid(row=1, column=1)
-                    return self.username_entry
-
-                def apply(self):
-                    self.result = (
-                        self.username_entry.get(),
-                        self.password_entry.get()
-                    )
-
-            root = tk.Tk()
-            root.withdraw()
-            dialog = LoginDialog(root, title="Earthdata Login")
-            if dialog.result:
-                username, password = dialog.result
-            else:
-                raise Exception("Login cancelled by user.")
-            auth_cookie_url = (
-                "https://urs.earthdata.nasa.gov/oauth/authorize"
-                "?client_id=BO_n7nTIlMljdvU6kRRB3g"
-                "&redirect_uri=https://auth.asf.alaska.edu/login"
-                "&response_type=code&state="
-            )
-            user_pass = base64.b64encode(f"{username}:{password}".encode("utf-8")).decode("utf-8")
-            opener = build_opener(HTTPCookieProcessor(cookie_jar), HTTPHandler(), HTTPSHandler())
-            request = Request(auth_cookie_url, headers={"Authorization": f"Basic {user_pass}"})
-            try:
-                opener.open(request)
-            except Exception:
-                pass
-
-    # ...existing code...
-    def download_file(url, idx):
-        filename = os.path.basename(url).split('?')[0]
-        outpath = os.path.join(outputdir, filename)
-        if os.path.isfile(outpath):
-            print(f" > File {outpath} exists, skipping.")
-            return
-        try:
-            request = Request(url)
-            response = urlopen(request, timeout=60)
-            with open(outpath, "wb") as f:
-                bytes_downloaded = 0
-                while True:
-                    chunk = response.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    f.write(chunk)
-                    bytes_downloaded += len(chunk)
-                    with lock:
-                        download_sizes[idx - 1] = bytes_downloaded
-                    # Call progress_callback if provided
-                    if progress_callback:
-                        progress_callback(idx, total, bytes_downloaded)
-            print(f" > Downloaded {outpath}")
-        except HTTPError as e:
-            print(f"HTTP Error: {e.code}, {url}")
-        except URLError as e:
-            print(f"URL Error: {e.reason}, {url}")
-        except Exception as e:
-            print(f"Error: {e}, {url}")
-    # ...existing code...
-
+    # Ensure EarthData authentication
+    if not ensure_earthdata_auth():
+        raise Exception("Could not authenticate with EarthData for downloads")
+    
+    print("✓ Using unified EarthData authentication for downloads")
+    
     os.makedirs(outputdir, exist_ok=True)
-    get_cookie()
-    total = len(urls)
+    total = len(files_info)
 
-    def threaded_download(url, idx):
-        download_file(url, idx, pause_event=pause_event)
-
+    # Shared data structures
     start_time = time.time()
+    paused_time = [0]  # Track total paused time (list for closure)
+    last_pause_start = [None]  # Track when current pause started (list for closure)
     download_sizes = [0] * total
     lock = threading.Lock()
+    speed_window = []
+    stats_running = True
 
-    def download_file(url, idx, pause_event=None):
+    # Initialize download_sizes with any existing files
+    # Note: This is a rough estimate - actual verification happens in download_file()
+    for idx, (url, expected_size) in enumerate(files_info):
         filename = os.path.basename(url).split('?')[0]
         outpath = os.path.join(outputdir, filename)
         if os.path.isfile(outpath):
-            print(f" > File {outpath} exists, skipping.")
+            try:
+                download_sizes[idx] = os.path.getsize(outpath)
+            except OSError:
+                download_sizes[idx] = 0
+
+    def download_file(url, idx, expected_size):
+        """Download a single file using authenticated session and update its progress."""
+        filename = os.path.basename(url).split('?')[0]
+        outpath = os.path.join(outputdir, filename)
+        
+        # Get authenticated session
+        session = get_earthdata_session()
+        
+        # Check if file exists and get its current size
+        existing_size = 0
+        if os.path.isfile(outpath):
+            try:
+                existing_size = os.path.getsize(outpath)
+            except OSError:
+                existing_size = 0
+        
+        # Check if file is complete
+        if existing_size > 0 and expected_size and existing_size == expected_size:
+            # File is complete, add to progress and skip
+            with lock:
+                download_sizes[idx - 1] = existing_size
+            print(f" > File {outpath} already complete ({existing_size} bytes), skipping.")
             return
+        
+        # Handle partial file - try to resume if supported
+        resume_pos = 0
+        mode = "wb"  # Default: overwrite
+        
+        if existing_size > 0:
+            if expected_size and existing_size < expected_size:
+                # Try to resume - check if server supports it
+                try:
+                    # Test resume with authenticated session
+                    test_response = session.get(url, headers={'Range': 'bytes=0-1'}, timeout=10)
+                    if test_response.status_code == 206:  # Partial Content
+                        resume_pos = existing_size
+                        print(f" > Resuming {filename} from {existing_size} bytes...")
+                    else:
+                        print(f" > Server doesn't support resume for {filename}, restarting...")
+                        os.remove(outpath)
+                        existing_size = 0
+                    test_response.close()
+                except Exception:
+                    print(f" > Resume test failed for {filename}, restarting...")
+                    try:
+                        os.remove(outpath)
+                    except OSError:
+                        pass
+                    existing_size = 0
+            elif expected_size and existing_size >= expected_size:
+                # File is larger than expected (corrupted?), restart
+                print(f" > File {filename} is larger than expected, restarting download...")
+                try:
+                    os.remove(outpath)
+                except OSError:
+                    pass
+                existing_size = 0
+        
+        # Initialize progress with existing bytes
+        with lock:
+            download_sizes[idx - 1] = existing_size
+        
         try:
-            request = Request(url)
-            response = urlopen(request, timeout=60)
-            with open(outpath, "wb") as f:
-                bytes_downloaded = 0
-                start_time = time.time()
-                while True:
+            # Download using authenticated session
+            headers = {}
+            if resume_pos > 0:
+                headers['Range'] = f'bytes={resume_pos}-'
+            
+            response = session.get(url, headers=headers, timeout=60, stream=True)
+            response.raise_for_status()
+            
+            # Verify resume response
+            if resume_pos > 0 and response.status_code != 206:
+                print(f" > Resume failed for {filename}, restarting...")
+                response.close()
+                os.remove(outpath)
+                existing_size = 0
+                resume_pos = 0
+                with lock:
+                    download_sizes[idx - 1] = 0
+                # Retry without resume
+                response = session.get(url, timeout=60, stream=True)
+                response.raise_for_status()
+            
+            mode = "ab" if resume_pos > 0 else "wb"
+            with open(outpath, mode) as f:
+                bytes_downloaded = existing_size  # Start with existing bytes
+                for chunk in response.iter_content(chunk_size=1024*1024):
                     # Respect pause
                     if pause_event and pause_event.is_set():
                         time.sleep(0.2)
                         continue
+                    
+                    if chunk:
+                        f.write(chunk)
+                        bytes_downloaded += len(chunk)
+                        
+                        # Update global progress tracking
+                        with lock:
+                            download_sizes[idx - 1] = bytes_downloaded
 
-                    chunk = response.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    f.write(chunk)
-                    bytes_downloaded += len(chunk)
-                    with lock:
-                        download_sizes[idx - 1] = bytes_downloaded
-
-                    # Build stats dict
-                    elapsed = time.time() - start_time
-                    total_downloaded = sum(download_sizes)
-                    mean_speed = total_downloaded / elapsed if elapsed > 0 else 0
-                    percent_complete = (
-                        total_downloaded / total_expected_size * 100
-                        if total_expected_size > 0 else 0
-                    )
-                    eta = (
-                        (total_expected_size - total_downloaded) / mean_speed
-                        if mean_speed > 0 else float("inf")
-                    )
-
-                    stats = {
-                        "elapsed": elapsed,
-                        "total_downloaded": total_downloaded,
-                        "mean_speed": mean_speed,
-                        "percent_complete": percent_complete,
-                        "eta_seconds": eta,
-                        "current_speed": bytes_downloaded / elapsed if elapsed > 0 else 0,
-                    }
-
-                    if progress_callback:
-                        progress_callback(stats)
-            print(f" > Downloaded {outpath}")
+            # Verify final file size if we know what to expect
+            if expected_size and bytes_downloaded != expected_size:
+                print(f" > Warning: {filename} size mismatch. Expected: {expected_size}, Got: {bytes_downloaded}")
+            else:
+                print(f" > Downloaded {outpath} ({bytes_downloaded} bytes)")
+                
         except Exception as e:
-            print(f"Error: {e}, {url}")
+            print(f"Error downloading {filename}: {e}")
+            # If download failed and we were resuming, try to restart
+            if resume_pos > 0 and os.path.isfile(outpath):
+                print(f" > Resume failed, will retry {filename} from beginning on next attempt")
 
+    def stats_updater():
+        """Continuously update and report download statistics."""
+        while stats_running:
+            current_time = time.time()
+            
+            if pause_event and pause_event.is_set():
+                # Track pause start time if not already tracking
+                if not last_pause_start:
+                    last_pause_start[0] = current_time
+                time.sleep(0.5)
+                continue
+            else:
+                # If we were paused and now resumed, add to total pause time
+                if last_pause_start[0] is not None:
+                    paused_time[0] += current_time - last_pause_start[0]
+                    last_pause_start[0] = None
+                
+            # Calculate elapsed time excluding pauses
+            elapsed = current_time - start_time - paused_time[0]
+            with lock:
+                total_downloaded = sum(download_sizes)
+                # Update speed window for current speed calculation
+                now = time.time()
+                speed_window.append((now, total_downloaded))
+                # Keep only last 3 seconds for more responsive current speed
+                speed_window[:] = [(t, b) for t, b in speed_window if now - t <= 3]
 
+            # Calculate average speed (using active time only)
+            mean_speed = total_downloaded / elapsed if elapsed > 0 else 0
+            
+            # Calculate current speed from sliding window
+            if len(speed_window) >= 2:
+                t0, b0 = speed_window[0]
+                t1, b1 = speed_window[-1]
+                current_speed = (b1 - b0) / (t1 - t0) if (t1 - t0) > 0 else 0
+            else:
+                current_speed = mean_speed
 
-    def get_download_stats():
-        elapsed = time.time() - start_time
-        with lock:
-            total_downloaded = sum(download_sizes)
+            # Calculate other statistics
+            percent_complete = (total_downloaded / total_expected_size * 100) if total_expected_size > 0 else 0
+            eta = (total_expected_size - total_downloaded) / current_speed if current_speed > 0 else float('inf')
 
-        mean_speed = total_downloaded / elapsed if elapsed > 0 else 0
-        percent_complete = (total_downloaded / total_expected_size * 100) if total_expected_size > 0 else 0
-        eta = (total_expected_size - total_downloaded) / mean_speed if mean_speed > 0 else float('inf')
+            stats = {
+                "elapsed": elapsed,
+                "total_downloaded": total_downloaded,
+                "total_expected_size": total_expected_size,
+                "mean_speed": mean_speed,
+                "current_speed": current_speed,
+                "percent_complete": percent_complete,
+                "eta_seconds": eta,
+            }
 
-        stats = {
-            "elapsed": elapsed,
-            "total_downloaded": total_downloaded,
-            "mean_speed": mean_speed,
-            "percent_complete": percent_complete,
-            "eta_seconds": eta,
-        }
-        return stats
+            if progress_callback:
+                progress_callback(stats)
+            
+            time.sleep(0.5)  # Update twice per second for smooth progress
 
-    speed_window = []
+    # Start statistics updater thread
+    stats_thread = threading.Thread(target=stats_updater, daemon=True)
+    stats_thread.start()
 
-    # Use ThreadPoolExecutor to run downloads in parallel threads
-    def stats_printer():        
-        stats = get_download_stats()
-        now = time.time()
-        with lock:
-            speed_window.append((now, sum(download_sizes)))
-            # Keep only last 5 seconds
-            speed_window[:] = [(t, b) for t, b in speed_window if now - t <= 5]
-        
-        if len(speed_window) >= 2:
-            t0, b0 = speed_window[0]
-            t1, b1 = speed_window[-1]
-            current_speed = (b1 - b0) / (t1 - t0) if (t1 - t0) > 0 else 0
-            stats["current_speed"] = current_speed
-        else:
-            stats["current_speed"] = stats["mean_speed"]  # fallback
-
-        if progress_callback:
-            progress_callback(stats)
-        time.sleep(1)
-
-    # Final update
-    stats = get_download_stats()
-    if progress_callback:
-        progress_callback(stats)
-
-    
-    printer_thread = threading.Thread(target=stats_printer)
-    printer_thread.start()
-
+    # Use ThreadPoolExecutor to run downloads in parallel
     with ThreadPoolExecutor(max_workers=min(8, total)) as executor:
         futures = []
-        for idx, url in enumerate(urls, 1):
-            futures.append(executor.submit(threaded_download, url, idx))
+        for idx, (url, expected_size) in enumerate(files_info, 1):
+            futures.append(executor.submit(download_file, url, idx, expected_size))
+        
+        # Wait for all downloads to complete
         for future in futures:
             future.result()
+
+    # Stop stats updater and provide final update
+    stats_running = False
+    stats_thread.join(timeout=1)
     
-    printer_thread.join()
-    # After downloads, return final stats
-    stats = get_download_stats()
-    return stats
+    # Final statistics
+    elapsed = time.time() - start_time
+    with lock:
+        total_downloaded = sum(download_sizes)
+    
+    final_stats = {
+        "elapsed": elapsed,
+        "total_downloaded": total_downloaded,
+        "total_expected_size": total_expected_size,
+        "mean_speed": total_downloaded / elapsed if elapsed > 0 else 0,
+        "current_speed": 0,  # Download complete
+        "percent_complete": 100.0,
+        "eta_seconds": 0,
+    }
+    
+    if progress_callback:
+        progress_callback(final_stats)
+    
+    return final_stats

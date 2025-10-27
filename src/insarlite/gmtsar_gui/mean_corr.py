@@ -1,6 +1,6 @@
 import os
 import subprocess
-from ..utils.utils import run_command
+from ..utils.utils import run_command, process_logger
 
 def get_grd_dimensions(grd_file):
     output = subprocess.check_output(f"gmt grdinfo -C {grd_file}", shell=True).decode().strip()
@@ -88,7 +88,7 @@ def compute_mean_and_std(grid_files, scale, outmean, outstd):
             if os.path.exists(file):
                 os.remove(file)
 
-def create_mean_grd(ifgsroot):
+def create_mean_grd(ifgsroot, log_file_path):
     os.chdir(ifgsroot)
 
     list_file = [os.path.join(root, file) for root, _, files in os.walk(ifgsroot) for file in files if
@@ -99,8 +99,9 @@ def create_mean_grd(ifgsroot):
 
     # Execute the check
     if not os.path.exists(os.path.join(ifgsroot, outmean)):
-        print(f'Calculating mean coherence grd for {ifgsroot}')  
+        process_logger(process_num="2.4", log_file=log_file_path, message=f'Calculating mean coherence grd for {ifgsroot}', mode="start")
         grdfiles = get_highest_occurrence_files(list_file)
         compute_mean_and_std(grdfiles, scale, outmean, outstd)
+        process_logger(process_num="2.4", log_file=log_file_path, message=f'Calculating mean coherence grd for {ifgsroot} completed', mode="end")
     else:
         print('Mean grid already calculated')

@@ -1,7 +1,7 @@
 import os
 import shutil
 import subprocess
-from ..utils.utils import subset_safe_dirs, update_console, create_symlink
+from ..utils.utils import subset_safe_dirs, create_symlink
 
 """
 This script is used to create a directory structure and copy files appropriately based on user inputs.
@@ -143,10 +143,7 @@ def orchestrate_structure_and_copy(output_dir, project_name, node, subswath_opti
             create_symlink(dem_file, os.path.join(dir_path, "raw", os.path.basename(dem_file)))
             subprocess.call(f'ln -s {os.path.join(os.path.dirname(dir_path), "data")}/*.SAFE/*/*iw{key[-1]}*{polarization}*xml {os.path.join(dir_path, "raw")}', shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)    
             subprocess.call(f'ln -s {os.path.join(os.path.dirname(dir_path), "data")}/*.SAFE/*/*iw{key[-1]}*{polarization}*tiff {os.path.join(dir_path, "raw")}', shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    if console_text and log_file_path:
-        update_console(console_text, "Copied files and created symlinks as required", log_file_path)
-    else:
-        print("Copied files and created symlinks as required")
+    print("Copied files and created symlinks as required")
     return paths, structure  
 
 def main(output_dir, project_name, node, subswath_option, dem_file, pin_file, in_data_dir, btconfig, console_text=None, log_file_path=None):

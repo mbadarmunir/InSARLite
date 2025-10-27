@@ -14,6 +14,7 @@ class GenIfg:
         self.dem_path = dem
         self.paths = paths
         self.mst = mst
+        self.log_file_path = paths.get("log_file_path")
         self.align_mode = align_mode
         self.esd_mode = esd_mode
         self.on_done = on_done
@@ -72,12 +73,12 @@ class GenIfg:
             gen_ifgs(self.paths, self.mst, filter_wavelength, rng, az, ncores)
 
         def merge_ifgs():
-            print("Starting IFG merging...")
+            print("Starting IFG merging...")            
             if "pmerge" in self.paths.keys():
                 pmerge = self.paths.get("pmerge")
                 if pmerge and os.path.exists(pmerge):
                     # Call the merge_thread function
-                    merge_thread(pmerge, int(self.cores_var.get()), self.mst)
+                    merge_thread(pmerge, self.log_file_path, self.mst)
 
         def calc_mean_corr():            
             ifgsroot = None
@@ -94,7 +95,7 @@ class GenIfg:
             if ifgsroot:
                 print(f"Creating mean & sd correlation grid in {ifgsroot}...")
                 if os.path.exists(ifgsroot):
-                    create_mean_grd(ifgsroot)
+                    create_mean_grd(ifgsroot, log_file_path=self.log_file_path)
 
             
 

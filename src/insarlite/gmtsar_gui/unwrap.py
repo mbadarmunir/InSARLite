@@ -8,17 +8,18 @@ from multiprocessing.pool import ThreadPool
 from ..gmtsar_gui.mask import GrdViewer
 from ..gmtsar_gui.ref_point import ReferencePointGUI
 from ..gmtsar_gui.gacos_atm_corr import gacos
-from ..utils.utils import execute_command
+from ..utils.utils import execute_command, add_tooltip, process_logger
 
 
 class UnwrapApp(tk.Frame):
-    def __init__(self, parent, ifgsroot, ifgs, gacosdir):
+    def __init__(self, parent, ifgsroot, ifgs, gacosdir, log_file=None):
         super().__init__(parent)
         parent.title("UnwrapApp")
         parent.geometry("400x400")
         self.ifgsroot = ifgsroot
         self.ifgs = ifgs
         self.gacosdir = gacosdir
+        self.log_file = log_file
         self.topodir = self.ifgsroot if os.path.basename(self.ifgsroot) == "merge" else os.path.join(os.path.dirname(self.ifgsroot), "topo")
 
         self._init_widgets()
@@ -27,9 +28,11 @@ class UnwrapApp(tk.Frame):
     def _init_widgets(self):
         self.btn_mask = tk.Button(self, text="Define Mask", command=self.define_mask)
         self.btn_mask.pack(pady=10)
+        add_tooltip(self.btn_mask, "Create or load a coherence mask\nMasks out low coherence areas before unwrapping\nButton color indicates status:\n• Red: No mask defined\n• Green: Mask defined")
 
         self.btn_ref = tk.Button(self, text="Define Reference Point", command=self.define_reference_point, state=tk.DISABLED)
         self.btn_ref.pack(pady=10)
+        add_tooltip(self.btn_ref, "Select reference point for phase unwrapping\nUsually placed in stable, high coherence area\nButton color indicates status:\n• Disabled: Define mask first\n• Green: Reference point set")
 
         self.controls_frame = tk.Frame(self)
         self.controls_frame.pack(pady=10, fill="x")
@@ -135,25 +138,30 @@ class UnwrapApp(tk.Frame):
         # Correlation threshold
         if not self.corr_label:
             self.corr_label = tk.Label(self.controls_inner_frame, text="Correlation Threshold:")
+            add_tooltip(self.corr_label, "Minimum coherence threshold for unwrapping\nPixels below this value will be masked")
         if not hasattr(self, 'corr_var'):
             self.corr_var = tk.StringVar(value="0.01")
         if not self.corr_entry:
             self.corr_entry = tk.Entry(self.controls_inner_frame, textvariable=self.corr_var, width=8, validate="key")
-            self.corr_entry.config(validatecommand=(self.corr_entry.register(self._validate_float), '%P'))       
+            self.corr_entry.config(validatecommand=(self.corr_entry.register(self._validate_float), '%P'))
+            add_tooltip(self.corr_entry, "Enter correlation threshold (0.0-1.0)\nTypical values: 0.01-0.1\nLower values = more pixels unwrapped")
 
         # Cores
         if not self.cores_label:
             self.cores_label = tk.Label(self.controls_inner_frame, text="Cores:")
+            add_tooltip(self.cores_label, "Number of CPU cores for parallel processing")
         if not self.cores_var:
             available_cores = os.cpu_count() or 1
             default_cores = max(1, available_cores - 1)
             self.cores_var = tk.StringVar(value=str(default_cores))
         if not self.cores_entry:
             self.cores_entry = tk.Entry(self.controls_inner_frame, textvariable=self.cores_var, width=5)
+            add_tooltip(self.cores_entry, f"Number of CPU cores to use\nAvailable cores: {os.cpu_count()}\nRecommended: Leave 1 core for system")
 
         # Incidence angle (only if gacosdir is not None)        
         if self.gacosdir is not None and not self.inc_label:
             self.inc_label = tk.Label(self.controls_inner_frame, text="Incidence Angle:")
+            add_tooltip(self.inc_label, "Radar incidence angle for GACOS atmospheric correction\nUsed to convert LOS displacement to vertical")
             self.inc_var = tk.StringVar(value="37")
             self.inc_entry = tk.Entry(
             self.controls_inner_frame,
@@ -162,6 +170,7 @@ class UnwrapApp(tk.Frame):
             validate="key"
             )
             self.inc_entry.config(validatecommand=(self.inc_entry.register(self._validate_float), '%P'))
+            add_tooltip(self.inc_entry, "Enter incidence angle in degrees\nTypical range for Sentinel-1: 29-46°\nCheck product metadata for exact value")
 
         # Place controls
         if not self._controls_packed:
@@ -182,6 +191,7 @@ class UnwrapApp(tk.Frame):
         if not self.unwrap_btn:
             self.unwrap_btn = tk.Button(self.controls_frame, text="Unwrap", command=self.run_unwrap)
             self.unwrap_btn.pack(pady=15, padx=20, anchor="w")
+            add_tooltip(self.unwrap_btn, "Start phase unwrapping process\nButton color indicates status:\n• Default: Ready to start\n• Yellow: Processing\n• Green: Completed successfully\n• Red: Error occurred")
 
     def run_unwrap(self):
         threshold = self.corr_entry.get() if self.corr_entry else ""
@@ -220,6 +230,10 @@ class UnwrapApp(tk.Frame):
         self.unwrap_btn.config(state=tk.DISABLED, bg="yellow")
         self.master.withdraw()
 
+        # Log the start of unwrapping
+        if self.log_file:
+            process_logger(process_num=5, log_file=self.log_file, message="Starting phase unwrapping workflow...", mode="start")
+
         def unwrap_worker():
             try:
                 print("Starting unwrapping in parallel...")
@@ -228,6 +242,11 @@ class UnwrapApp(tk.Frame):
                 self.post_unwrap(self.ifgsroot)            
                 print("Starting GACOS correction...")
                 self.run_gacos()
+                
+                # Log completion of unwrapping
+                if self.log_file:
+                    process_logger(process_num=5, log_file=self.log_file, message="Phase unwrapping workflow completed.", mode="end")
+                    
                 self.master.after(0, lambda: [
                     self.unwrap_btn.config(bg="green", state=tk.NORMAL),
                     messagebox.showinfo("Unwrapping Complete", "Unwrapping process is complete.", parent=self.master),
