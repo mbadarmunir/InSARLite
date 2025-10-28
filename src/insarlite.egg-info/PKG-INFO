@@ -2,8 +2,6 @@ Metadata-Version: 2.4
 Name: insarlite
 Version: 1.0.0
 Summary: A comprehensive GUI application for GMTSAR-based InSAR processing
-Home-page: https://github.com/mbadarmunir/InSARLite
-Author: Muhammad Badar Munir
 Author-email: Muhammad Badar Munir <mbadarmunir@gmail.com>
 Maintainer-email: Muhammad Badar Munir <mbadarmunir@gmail.com>
 License-Expression: MIT
@@ -11,6 +9,7 @@ Project-URL: Homepage, https://github.com/mbadarmunir/InSARLite
 Project-URL: Documentation, https://insarlite.readthedocs.io/
 Project-URL: Repository, https://github.com/mbadarmunir/InSARLite
 Project-URL: Bug Tracker, https://github.com/mbadarmunir/InSARLite/issues
+Project-URL: Changelog, https://github.com/mbadarmunir/InSARLite/blob/main/CHANGELOG.md
 Keywords: InSAR,SAR,interferometry,GMTSAR,Sentinel-1,remote sensing,geodesy
 Classifier: Development Status :: 5 - Production/Stable
 Classifier: Intended Audience :: Science/Research
@@ -42,7 +41,7 @@ Requires-Dist: asf_search>=6.0.0
 Requires-Dist: shapely>=1.7.0
 Requires-Dist: cartopy>=0.20.0
 Requires-Dist: dask>=2021.6.0
-Requires-Dist: packaging<24.0,>=20.0
+Requires-Dist: packaging>=20.0
 Requires-Dist: Pillow>=8.0.0
 Requires-Dist: scipy>=1.7.0
 Requires-Dist: lxml>=4.6.0
@@ -61,6 +60,8 @@ Requires-Dist: black>=22.0.0; extra == "dev"
 Requires-Dist: isort>=5.10.0; extra == "dev"
 Requires-Dist: flake8>=5.0.0; extra == "dev"
 Requires-Dist: mypy>=0.991; extra == "dev"
+Requires-Dist: twine>=4.0.0; extra == "dev"
+Requires-Dist: build>=0.8.0; extra == "dev"
 Dynamic: license-file
 
 # InSARLite

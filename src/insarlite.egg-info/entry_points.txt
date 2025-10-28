@@ -1,2 +1,2 @@
 [console_scripts]
-InSARLiteApp = insarlite.main:main
+insarlite = insarlite.main:main

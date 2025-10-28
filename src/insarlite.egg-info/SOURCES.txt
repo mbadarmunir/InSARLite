@@ -1,9 +1,9 @@
 LICENSE
 README.md
 pyproject.toml
-setup.cfg
 src/insarlite/__init__.py
 src/insarlite/__main__.py
+src/insarlite/config.json
 src/insarlite/main.py
 src/insarlite.egg-info/PKG-INFO
 src/insarlite.egg-info/SOURCES.txt
