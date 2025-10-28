@@ -4,7 +4,7 @@ Version: 1.0.0
 Summary: A comprehensive GUI application for GMTSAR-based InSAR processing
 Author-email: Muhammad Badar Munir <mbadarmunir@gmail.com>
 Maintainer-email: Muhammad Badar Munir <mbadarmunir@gmail.com>
-License-Expression: MIT
+License: MIT
 Project-URL: Homepage, https://github.com/mbadarmunir/InSARLite
 Project-URL: Documentation, https://insarlite.readthedocs.io/
 Project-URL: Repository, https://github.com/mbadarmunir/InSARLite

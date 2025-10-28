@@ -7,7 +7,7 @@ name = "insarlite"
 version = "1.0.0"
 description = "A comprehensive GUI application for GMTSAR-based InSAR processing"
 readme = "README.md"
-license = "MIT"
+license = {text = "MIT"}
 authors = [
     {name = "Muhammad Badar Munir", email = "mbadarmunir@gmail.com"}
 ]
