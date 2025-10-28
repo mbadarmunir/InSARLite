@@ -86,7 +86,7 @@ jobs:
     # Dedicated environments with protections for publishing are strongly recommended.
     environment:
       name: pypi
-      url: https://pypi.org/project/insarlite/${{ github.event.release.tag_name }}
+      url: https://pypi.org/project/insarlite/
 
     steps:
       - name: Retrieve release distributions
