@@ -393,12 +393,13 @@ class DataHandlers:
             app_instance.root.after(0, after_extraction)
             
         except Exception as e:
+            error_msg = str(e)  # Capture exception message
             def after_error():
                 if hasattr(app_instance, '_extract_btn') and app_instance._extract_btn and app_instance._extract_btn.winfo_exists():
                     app_instance._extract_btn.config(state="normal", text="Extract Zip Files")
                 if hasattr(app_instance, 'data_folder_entry') and app_instance.data_folder_entry and app_instance.data_folder_entry.winfo_exists():
                     app_instance.data_folder_entry.config(state="normal")
-                messagebox.showerror("Extraction Error", f"Failed to extract zip files: {e}")
+                messagebox.showerror("Extraction Error", f"Failed to extract zip files: {error_msg}")
             
             app_instance.root.after(0, after_error)
 

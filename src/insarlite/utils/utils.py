@@ -1074,7 +1074,7 @@ def interactive_baseline_edges(canvas, points, edges):
             canvas.create_oval(x - 2, y - 2, x + 2, y + 2, fill="blue", tags=f"pt{idx}")
 
     def reset_selection():
-        nonlocal selected_points, selected_edge
+        nonlocal selected_edge
         selected_points.clear()
         if selected_edge is not None:
             canvas.itemconfig(selected_edge, fill="black", width=1)

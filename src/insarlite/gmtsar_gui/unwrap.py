@@ -253,9 +253,10 @@ class UnwrapApp(tk.Frame):
                     self.master.destroy()
                 ])
             except Exception as e:
+                error_msg = str(e)  # Capture exception message
                 self.master.after(0, lambda: [
                     self.unwrap_btn.config(bg="red", state=tk.NORMAL),
-                    messagebox.showerror("Unwrapping Error", f"An error occurred: {e}", parent=self.master),
+                    messagebox.showerror("Unwrapping Error", f"An error occurred: {error_msg}", parent=self.master),
                     self.master.deiconify(),
                     self.master.lift(),
                     self.master.focus_force()
