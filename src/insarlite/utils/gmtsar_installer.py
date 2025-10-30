@@ -131,9 +131,13 @@ def install_sbas_parallel(gmtsar_dir):
                 try:
                     run_command(fallback_cmd)
                 except Exception as fallback_error:
-                    raise RuntimeError(f"Both linking attempts failed. Original: {link_error}, Fallback: {fallback_error}")
+                    print(f"Warning: SBAS parallel compilation failed - requires GMTSAR library functions")
+                    print(f"SBAS parallel will not be available, but GMTSAR installation will continue")
+                    return  # Exit gracefully instead of raising error
             else:
-                raise link_error
+                print(f"Warning: SBAS parallel compilation failed - GMTSAR library not found")
+                print(f"SBAS parallel will not be available, but GMTSAR installation will continue")
+                return  # Exit gracefully instead of raising error
         
         # Install sbas_parallel to system
         run_command("sudo cp sbas_parallel /usr/local/bin/")

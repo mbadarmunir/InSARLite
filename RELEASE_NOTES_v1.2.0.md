@@ -25,10 +25,12 @@ InSARLite now provides seamless integration with Windows Subsystem for Linux (WS
 #### **SBAS Parallel with OpenMP Support**
 - **Custom Compilation**: Advanced SBAS parallel compilation with optimized gcc flags
 - **OpenMP Multi-threading**: Enhanced time series analysis with parallel processing capabilities
+- **Smart Dependency Handling**: Requires GMTSAR library functions - gracefully skips compilation if dependencies unavailable
 - **Production-Ready Build**: Uses proven compilation flags for optimal performance:
   ```bash
   gcc -fopenmp -O2 -Wall -m64 -fPIC -fno-strict-aliasing -std=c99 -z muldefs
   ```
+- **Availability**: SBAS parallel is compiled when GMTSAR library is properly built and available
 
 ### 📦 **Improved Dependencies & Installation**
 
@@ -182,7 +184,8 @@ echo $DISPLAY  # Should show :0 automatically
 
 ### **Known Issues**
 - **WSL Display**: If GUI doesn't appear, install X11 server (VcXsrv/Xming) on Windows
-- **SBAS Parallel**: Compilation may fail on systems with missing development tools or GMTSAR library linking issues (automatically handled with fallback strategies)
+- **SBAS Parallel**: Compilation may fail on systems with missing development tools or GMTSAR library linking issues (gracefully handled - GMTSAR installation continues without SBAS parallel)
+- **SBAS Parallel Dependencies**: Requires GMTSAR library functions - standalone compilation not possible due to code dependencies
 - **GNU Parallel**: May require manual installation on non-Debian systems
 
 ### **Reporting Bugs**
