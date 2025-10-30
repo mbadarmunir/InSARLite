@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "insarlite"
-version = "1.0.1"
+version = "1.1.0"
 description = "A comprehensive GUI application for GMTSAR-based InSAR processing"
 readme = "README.md"
 authors = [
