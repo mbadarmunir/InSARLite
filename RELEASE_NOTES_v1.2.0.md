@@ -48,7 +48,8 @@ InSARLite now provides seamless integration with Windows Subsystem for Linux (WS
 ### **GMTSAR Installer Enhancements**
 - **WSL-Aware Installation**: Automatically detects and configures for WSL environments
 - **GNU Parallel Integration**: Seamlessly installs GNU Parallel alongside GMTSAR
-- **SBAS Parallel Compilation**: Automated compilation and installation of SBAS parallel tools
+- **SBAS Parallel Compilation**: Automated compilation and installation of SBAS parallel tools with intelligent fallback strategies
+- **Robust Library Linking**: Smart detection of GMTSAR library paths with fallback compilation options
 - **Intelligent Orbits Handling**: Properly skips orbits configuration when user opts out (no fallback to /tmp)
 - **Error Recovery**: Better error handling and graceful fallbacks during installation failures
 
@@ -181,7 +182,7 @@ echo $DISPLAY  # Should show :0 automatically
 
 ### **Known Issues**
 - **WSL Display**: If GUI doesn't appear, install X11 server (VcXsrv/Xming) on Windows
-- **SBAS Parallel**: Compilation may fail on systems with missing development tools (automatically handled)
+- **SBAS Parallel**: Compilation may fail on systems with missing development tools or GMTSAR library linking issues (automatically handled with fallback strategies)
 - **GNU Parallel**: May require manual installation on non-Debian systems
 
 ### **Reporting Bugs**

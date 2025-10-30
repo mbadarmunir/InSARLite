@@ -45,6 +45,15 @@ def install_sbas_parallel(gmtsar_dir):
     """Install SBAS parallel with proper compilation flags."""
     print("Installing SBAS parallel...")
     
+    # Check if sbas_parallel is already available
+    try:
+        result = subprocess.run("which sbas_parallel", shell=True, capture_output=True, text=True)
+        if result.returncode == 0:
+            print("SBAS parallel is already installed and available in PATH")
+            return
+    except:
+        pass
+    
     original_dir = os.getcwd()
     sbas_dir = os.path.join(gmtsar_dir, "gmtsar")
     
@@ -72,13 +81,59 @@ def install_sbas_parallel(gmtsar_dir):
         run_command(compile_cmd)
         
         # Link sbas_parallel executable
-        link_cmd = (
-            f"gcc -fopenmp -m64 -s -Wl,-rpath,/usr/lib/x86_64-linux-gnu "
-            f"-z muldefs sbas_parallel.o -L{gmtsar_dir}/gmtsar -lgmtsar "
-            "-L/usr/lib/x86_64-linux-gnu -lgmt -llapack -lblas -lm "
-            "-L/usr/local/lib -ltiff -lm -o sbas_parallel"
-        )
-        run_command(link_cmd)
+        # First try to find GMTSAR library
+        gmtsar_lib_paths = [
+            f"{gmtsar_dir}/gmtsar",
+            f"{gmtsar_dir}/lib", 
+            "/usr/local/lib",
+            "/usr/lib/x86_64-linux-gnu"
+        ]
+        
+        gmtsar_lib_found = False
+        gmtsar_lib_path = ""
+        
+        for lib_path in gmtsar_lib_paths:
+            if os.path.exists(f"{lib_path}/libgmtsar.so") or os.path.exists(f"{lib_path}/libgmtsar.a"):
+                gmtsar_lib_found = True
+                gmtsar_lib_path = lib_path
+                break
+        
+        if gmtsar_lib_found:
+            # Use standard linking with GMTSAR library
+            link_cmd = (
+                f"gcc -fopenmp -m64 -s -Wl,-rpath,/usr/lib/x86_64-linux-gnu "
+                f"-z muldefs sbas_parallel.o -L{gmtsar_lib_path} -lgmtsar "
+                "-L/usr/lib/x86_64-linux-gnu -lgmt -llapack -lblas -lm "
+                "-L/usr/local/lib -ltiff -lm -o sbas_parallel"
+            )
+        else:
+            # Fallback: try linking without GMTSAR library (standalone compilation)
+            print("Warning: GMTSAR library not found, attempting standalone compilation...")
+            link_cmd = (
+                f"gcc -fopenmp -m64 -s -Wl,-rpath,/usr/lib/x86_64-linux-gnu "
+                f"-z muldefs sbas_parallel.o "
+                "-L/usr/lib/x86_64-linux-gnu -lgmt -llapack -lblas -lm "
+                "-L/usr/local/lib -ltiff -lm -o sbas_parallel"
+            )
+        
+        try:
+            run_command(link_cmd)
+        except Exception as link_error:
+            if gmtsar_lib_found:
+                # If linking with GMTSAR library failed, try without it
+                print("Warning: Linking with GMTSAR library failed, trying standalone compilation...")
+                fallback_cmd = (
+                    f"gcc -fopenmp -m64 -s -Wl,-rpath,/usr/lib/x86_64-linux-gnu "
+                    f"-z muldefs sbas_parallel.o "
+                    "-L/usr/lib/x86_64-linux-gnu -lgmt -llapack -lblas -lm "
+                    "-L/usr/local/lib -ltiff -lm -o sbas_parallel"
+                )
+                try:
+                    run_command(fallback_cmd)
+                except Exception as fallback_error:
+                    raise RuntimeError(f"Both linking attempts failed. Original: {link_error}, Fallback: {fallback_error}")
+            else:
+                raise link_error
         
         # Install sbas_parallel to system
         run_command("sudo cp sbas_parallel /usr/local/bin/")
