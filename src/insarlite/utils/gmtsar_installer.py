@@ -150,7 +150,7 @@ def update_config_mk_for_gfortran9(gmtsar_dir):
         print("Updated config.mk to use gcc-9 and gfortran-9")
 
 
-def install_gmtsar(install_dir, orbits_dir, use_newer_ubuntu=True):
+def install_gmtsar(install_dir, orbits_dir=None, use_newer_ubuntu=True):
     """Clone, configure, make, and install GMTSAR."""
     gmtsar_dir = os.path.join(install_dir, "GMTSAR")
 
@@ -165,10 +165,17 @@ def install_gmtsar(install_dir, orbits_dir, use_newer_ubuntu=True):
         run_command("autoconf")
         run_command("autoupdate")
 
-        if use_newer_ubuntu:
-            run_command(f"./configure --with-orbits-dir={orbits_dir} CFLAGS='-z muldefs' LDFLAGS='-z muldefs'")
+        # Configure with or without orbits directory
+        if orbits_dir:
+            if use_newer_ubuntu:
+                run_command(f"./configure --with-orbits-dir={orbits_dir} CFLAGS='-z muldefs' LDFLAGS='-z muldefs'")
+            else:
+                run_command(f"./configure --with-orbits-dir={orbits_dir}")
         else:
-            run_command(f"./configure --with-orbits-dir={orbits_dir}")
+            if use_newer_ubuntu:
+                run_command(f"./configure CFLAGS='-z muldefs' LDFLAGS='-z muldefs'")
+            else:
+                run_command(f"./configure")
 
         # Update config.mk to use gfortran-9 and gcc-9
         update_config_mk_for_gfortran9(gmtsar_dir)
@@ -234,10 +241,13 @@ def install_gmtsar_gui():
         orbits_dir = os.path.join(install_dir, "orbits")
         os.makedirs(orbits_dir, exist_ok=True)
     else:
-        orbits_dir = "/tmp"  # fallback path
+        orbits_dir = None  # Skip orbits configuration
 
     # Confirm
-    proceed = messagebox.askyesno("Confirm", f"Install GMTSAR in:\n{install_dir}\n\nOrbits in:\n{orbits_dir}\n\nProceed?")
+    if orbits_dir:
+        proceed = messagebox.askyesno("Confirm", f"Install GMTSAR in:\n{install_dir}\n\nOrbits in:\n{orbits_dir}\n\nProceed?")
+    else:
+        proceed = messagebox.askyesno("Confirm", f"Install GMTSAR in:\n{install_dir}\n\nSkip orbit files installation\n\nProceed?")
     if not proceed:
         return False
 
@@ -270,11 +280,14 @@ def install_gmtsar_console():
         orbits_dir = os.path.join(install_dir, "orbits")
         os.makedirs(orbits_dir, exist_ok=True)
     else:
-        orbits_dir = "/tmp"  # fallback path
+        orbits_dir = None  # Skip orbits configuration
     
     # Confirm
     print(f"\nInstall GMTSAR in: {install_dir}")
-    print(f"Orbits in: {orbits_dir}")
+    if orbits_dir:
+        print(f"Orbits in: {orbits_dir}")
+    else:
+        print("Skip orbit files installation")
     proceed = input("Proceed? (y/n): ").lower().strip()
     
     if proceed not in ['y', 'yes']:
