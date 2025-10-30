@@ -80,14 +80,18 @@ class InSARLiteApp:
     def _check_gmtsar_installation(self):
         """Check if GMTSAR is available by running gmtsar.csh command."""
         try:
-            # Simply try to run gmtsar.csh to check if GMTSAR is available
-            result = subprocess.run(['gmtsar.csh'], 
+            # Check if gmtsar.csh is accessible using which command
+            result = subprocess.run(['which', 'gmtsar.csh'], 
                                   capture_output=True, 
                                   text=True, 
-                                  timeout=10)
+                                  timeout=5)
             
-            if result.returncode == 0 and 'GMTSAR version' in result.stdout:
-                # GMTSAR is available, no need to install
+            if result.returncode == 0:
+                print(f"✅ GMTSAR found at: {result.stdout.strip()}")
+                
+                # GMTSAR is available - now check SBAS parallel
+                from .utils.gmtsar_installer import check_and_install_sbas_parallel
+                check_and_install_sbas_parallel()
                 return
                 
         except (FileNotFoundError, subprocess.TimeoutExpired, subprocess.CalledProcessError):
@@ -97,7 +101,23 @@ class InSARLiteApp:
         print("GMTSAR not found. Checking for installation...")
         success = check_and_install_gmtsar(gui_mode=True)
         
-        if not success:
+        if success == "close_app":
+            # GMTSAR was installed, but app needs to close for environment variables to take effect
+            try:
+                messagebox.showinfo(
+                    "Installation Complete", 
+                    "GMTSAR installation completed!\n\n"
+                    "InSARLite will now close so you can restart your terminal.\n"
+                    "Please restart your terminal and launch InSARLite again."
+                )
+            except:
+                print("GMTSAR installation completed!")
+                print("Please restart your terminal and launch InSARLite again.")
+            
+            self.root.destroy()
+            import sys
+            sys.exit(0)
+        elif not success:
             # Show error and exit - InSARLite cannot work without GMTSAR
             try:
                 messagebox.showerror(

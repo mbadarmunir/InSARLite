@@ -41,6 +41,60 @@ def configure_wsl_display():
     print("Added DISPLAY=:0 configuration for WSL")
 
 
+def check_gmtsar_availability():
+    """Check if GMTSAR is properly installed and accessible."""
+    try:
+        # Check if gmtsar.csh is accessible
+        result = subprocess.run("which gmtsar.csh", shell=True, capture_output=True, text=True)
+        if result.returncode == 0:
+            return True, result.stdout.strip()
+        
+        # Alternative check for GMTSAR environment variable
+        gmtsar_path = os.environ.get('GMTSAR')
+        if gmtsar_path and os.path.exists(os.path.join(gmtsar_path, 'bin', 'gmtsar.csh')):
+            return True, os.path.join(gmtsar_path, 'bin', 'gmtsar.csh')
+            
+        return False, None
+    except Exception:
+        return False, None
+
+
+def check_and_install_sbas_parallel():
+    """Check for SBAS parallel and install if GMTSAR is available but SBAS parallel is not."""
+    print("Checking SBAS parallel availability...")
+    
+    # First check if sbas_parallel is already available
+    try:
+        result = subprocess.run("which sbas_parallel", shell=True, capture_output=True, text=True)
+        if result.returncode == 0:
+            print("✅ SBAS parallel is already installed and available")
+            return True
+    except:
+        pass
+    
+    # Check if GMTSAR is available
+    gmtsar_available, gmtsar_path = check_gmtsar_availability()
+    
+    if not gmtsar_available:
+        print("❌ GMTSAR not found - cannot install SBAS parallel")
+        print("💡 Please ensure GMTSAR is installed and terminal has been restarted")
+        return False
+    
+    print(f"✅ GMTSAR found at: {gmtsar_path}")
+    print("🔄 Installing SBAS parallel...")
+    
+    # Get GMTSAR directory from the path
+    gmtsar_bin_dir = os.path.dirname(gmtsar_path)
+    gmtsar_root = os.path.dirname(gmtsar_bin_dir)
+    
+    try:
+        install_sbas_parallel(gmtsar_root)
+        return True
+    except Exception as e:
+        print(f"⚠️  SBAS parallel installation failed: {e}")
+        return False
+
+
 def install_sbas_parallel(gmtsar_dir):
     """Install SBAS parallel with proper compilation flags."""
     print("Installing SBAS parallel...")
@@ -68,10 +122,37 @@ def install_sbas_parallel(gmtsar_dir):
         if not os.path.exists("sbas_parallel.c"):
             print("Warning: sbas_parallel.c not found, skipping SBAS parallel installation")
             return
+
+        # Try to rebuild GMTSAR library first for linking
+        print("Rebuilding GMTSAR components for SBAS parallel compilation...")
         
-        # Clean previous builds
-        run_command("make clean")
+        # Save current directory
+        current_dir = os.getcwd()
         
+        # Go to main GMTSAR directory and rebuild
+        gmtsar_root = os.path.dirname(current_dir)
+        os.chdir(gmtsar_root)
+        
+        try:
+            # Run make to ensure all object files and libraries are built
+            run_command("make")
+            print("✅ GMTSAR rebuild completed")
+        except Exception as e:
+            print(f"Warning: GMTSAR rebuild failed: {e}")
+        
+        # Return to gmtsar subdirectory
+        os.chdir(current_dir)
+        
+        # Now check for library
+        if os.path.exists("libgmtsar.a"):
+            print("✅ Found GMTSAR library after rebuild")
+            gmtsar_lib_found = True
+            gmtsar_lib_path = "."
+        else:
+            print("⚠️  GMTSAR library not found after rebuild")
+            gmtsar_lib_found = False
+            gmtsar_lib_path = ""
+
         # Compile sbas_parallel.o with OpenMP support
         compile_cmd = (
             "gcc -fopenmp -O2 -Wall -m64 -fPIC -fno-strict-aliasing -std=c99 "
@@ -79,25 +160,8 @@ def install_sbas_parallel(gmtsar_dir):
             "-c -o sbas_parallel.o sbas_parallel.c"
         )
         run_command(compile_cmd)
-        
+
         # Link sbas_parallel executable
-        # First try to find GMTSAR library
-        gmtsar_lib_paths = [
-            f"{gmtsar_dir}/gmtsar",
-            f"{gmtsar_dir}/lib", 
-            "/usr/local/lib",
-            "/usr/lib/x86_64-linux-gnu"
-        ]
-        
-        gmtsar_lib_found = False
-        gmtsar_lib_path = ""
-        
-        for lib_path in gmtsar_lib_paths:
-            if os.path.exists(f"{lib_path}/libgmtsar.so") or os.path.exists(f"{lib_path}/libgmtsar.a"):
-                gmtsar_lib_found = True
-                gmtsar_lib_path = lib_path
-                break
-        
         if gmtsar_lib_found:
             # Use standard linking with GMTSAR library
             link_cmd = (
@@ -242,9 +306,6 @@ def install_gmtsar(install_dir, orbits_dir=None, use_newer_ubuntu=True):
         run_command("make")
         run_command("sudo make install")
 
-        # Install SBAS parallel
-        install_sbas_parallel(gmtsar_dir)
-
         # Configure WSL display if running in WSL
         configure_wsl_display()
 
@@ -254,6 +315,18 @@ def install_gmtsar(install_dir, orbits_dir=None, use_newer_ubuntu=True):
             f.write(f"\n# GMTSAR configuration\n")
             f.write(f"export GMTSAR={gmtsar_dir}\n")
             f.write(f"export PATH=$GMTSAR/bin:$PATH\n")
+        
+        # Note: SBAS parallel installation is handled separately after terminal restart
+        print("\n" + "="*60)
+        print("🎉 GMTSAR INSTALLATION COMPLETED SUCCESSFULLY!")
+        print("="*60)
+        print("⚠️  IMPORTANT: You must restart your terminal for environment variables to take effect.")
+        print("📋 Next steps:")
+        print("   1. Close InSARLite application")
+        print("   2. Close and restart your terminal")
+        print("   3. Launch InSARLite again: insarlite")
+        print("   4. SBAS parallel will be checked and installed if needed")
+        print("="*60)
     
     finally:
         os.chdir(original_dir)
@@ -267,18 +340,21 @@ def check_gmtsar_installation():
         bool: True if GMTSAR is available and working
     """
     try:
-        result = subprocess.run(['gmtsar.csh'], 
+        # Check if gmtsar.csh is accessible
+        result = subprocess.run(['which', 'gmtsar.csh'], 
                               capture_output=True, 
                               text=True, 
-                              timeout=10)
+                              timeout=5)
         
-        # Check if command succeeded and contains version info
-        if result.returncode == 0 and 'GMTSAR version' in result.stdout:
+        if result.returncode == 0:
+            print(f"✅ GMTSAR found at: {result.stdout.strip()}")
             return True
         else:
+            print("❌ gmtsar.csh not found in PATH")
             return False
             
-    except (FileNotFoundError, subprocess.TimeoutExpired, subprocess.CalledProcessError):
+    except (FileNotFoundError, subprocess.TimeoutExpired, subprocess.CalledProcessError) as e:
+        print(f"❌ Error checking GMTSAR: {e}")
         return False
 
 
@@ -315,8 +391,13 @@ def install_gmtsar_gui():
         if install_orbits_flag:
             install_orbits(orbits_dir)
         install_gmtsar(install_dir, orbits_dir, use_newer_ubuntu=True)
-        messagebox.showinfo("Success", "GMTSAR installation completed.\nPlease restart your terminal.")
-        return True
+        messagebox.showinfo("Installation Complete", 
+                          "GMTSAR installation completed successfully!\n\n"
+                          "IMPORTANT: Please close InSARLite and restart your terminal\n"
+                          "for environment variables to take effect.\n\n"
+                          "Then restart InSARLite to check for SBAS parallel installation.")
+        # Request application closure
+        return "close_app"
     except Exception as e:
         messagebox.showerror("Error", str(e))
         return False
@@ -358,8 +439,15 @@ def install_gmtsar_console():
         if install_orbits_flag:
             install_orbits(orbits_dir)
         install_gmtsar(install_dir, orbits_dir, use_newer_ubuntu=True)
-        print("GMTSAR installation completed. Please restart your terminal.")
-        return True
+        print("\n" + "="*60)
+        print("🎉 GMTSAR INSTALLATION COMPLETED SUCCESSFULLY!")
+        print("="*60)
+        print("⚠️  IMPORTANT: Please close your terminal and restart it")
+        print("   for environment variables to take effect.")
+        print("📋 Then restart InSARLite to check for SBAS parallel installation.")
+        print("="*60)
+        input("\nPress Enter to continue...")
+        return "close_app"
     except Exception as e:
         print(f"Error: {e}")
         return False
@@ -379,6 +467,9 @@ def check_and_install_gmtsar(gui_mode=True):
     # First check if GMTSAR is already installed
     if check_gmtsar_installation():
         print("✅ GMTSAR is available")
+        
+        # Check and install SBAS parallel if needed (second phase)
+        check_and_install_sbas_parallel()
         return True
     
     # GMTSAR not found - need to install it

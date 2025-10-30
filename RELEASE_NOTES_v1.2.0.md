@@ -34,10 +34,26 @@ InSARLite now provides seamless integration with Windows Subsystem for Linux (WS
 
 ### 📦 **Improved Dependencies & Installation**
 
-#### **Enhanced Package Management**
+#### **Installation Flow Improvements**
+- **Environment Variable Handling**: Proper terminal restart requirement handling for environment variables
+- **Application Lifecycle Management**: Automatic application closure after GMTSAR installation
+- **Two-Phase Installation Process**: 
+  1. **Phase 1**: GMTSAR core installation with terminal restart requirement
+  2. **Phase 2**: SBAS parallel installation after environment is properly configured
+- **Smart Dependency Detection**: Uses `gmtsar.csh` command availability for proper GMTSAR detection
+- **User Guidance**: Clear instructions for terminal restart and application relaunch
 - **netCDF4 Support**: Added `netCDF4>=1.5.0` dependency for better NetCDF file handling
 - **Robust Installation**: More resilient GMTSAR installer with comprehensive error handling
 - **Cross-Platform Compatibility**: Improved dependency resolution for different Linux distributions
+
+### **Enhanced Package Management**
+- **netCDF4 Support**: Added `netCDF4>=1.5.0` dependency for better NetCDF file handling
+- **Robust Installation**: More resilient GMTSAR installer with comprehensive error handling
+- **Cross-Platform Compatibility**: Improved dependency resolution for different Linux distributions
+- **Dual Command Support**: 
+  - `insarlite` - Traditional entry point
+  - `InSARLiteApp` - New, more descriptive entry point
+- **Better Compatibility**: Improved compatibility with different Python environments and package managers
 
 #### **Enhanced Entry Points**
 - **Dual Command Support**: 
@@ -45,12 +61,12 @@ InSARLite now provides seamless integration with Windows Subsystem for Linux (WS
   - `InSARLiteApp` - New, more descriptive entry point
 - **Better Compatibility**: Improved compatibility with different Python environments and package managers
 
-## 🛠️ Technical Improvements
-
 ### **GMTSAR Installer Enhancements**
 - **WSL-Aware Installation**: Automatically detects and configures for WSL environments
 - **GNU Parallel Integration**: Seamlessly installs GNU Parallel alongside GMTSAR
-- **SBAS Parallel Compilation**: Automated compilation and installation of SBAS parallel tools with intelligent fallback strategies
+- **Two-Phase Installation**: Splits GMTSAR and SBAS parallel installation for proper environment handling
+- **Smart Terminal Management**: Automatically closes application after GMTSAR installation to ensure environment variables take effect
+- **SBAS Parallel Smart Detection**: Only attempts SBAS parallel installation when GMTSAR is properly accessible
 - **Robust Library Linking**: Smart detection of GMTSAR library paths with fallback compilation options
 - **Intelligent Orbits Handling**: Properly skips orbits configuration when user opts out (no fallback to /tmp)
 - **Error Recovery**: Better error handling and graceful fallbacks during installation failures
