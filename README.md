@@ -144,7 +144,7 @@ If you use InSARLite in your research, please cite:
   title={InSARLite: A GUI Application for GMTSAR-based InSAR Processing},
   author={Muhammad Badar Munir},
   year={2025},
-  version={1.0.0},
+  version={1.1.0},
   url={https://github.com/mbadarmunir/InSARLite},
   license={MIT}
 }
@@ -153,5 +153,3 @@ If you use InSARLite in your research, please cite:
 ---
 
 **InSARLite - Making InSAR accessible to everyone** 🛰️📊
-
-<!-- Updated: 2025-10-30 -->
