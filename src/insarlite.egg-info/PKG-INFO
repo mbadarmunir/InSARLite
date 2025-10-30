@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: insarlite
-Version: 1.0.1
+Version: 1.2.0
 Summary: A comprehensive GUI application for GMTSAR-based InSAR processing
 Author-email: Muhammad Badar Munir <mbadarmunir@gmail.com>
 Maintainer-email: Muhammad Badar Munir <mbadarmunir@gmail.com>
@@ -44,6 +44,7 @@ Requires-Dist: packaging>=20.0
 Requires-Dist: Pillow>=8.0.0
 Requires-Dist: scipy>=1.7.0
 Requires-Dist: lxml>=4.6.0
+Requires-Dist: netCDF4>=1.5.0
 Requires-Dist: basemap>=1.3.0; platform_system != "Windows"
 Provides-Extra: docs
 Requires-Dist: sphinx>=4.0.0; extra == "docs"
@@ -67,7 +68,7 @@ Dynamic: license-file
 
 [![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/mbadarmunir/InSARLite/releases)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/mbadarmunir/InSARLite/releases)
 [![Documentation](https://img.shields.io/badge/docs-available-brightgreen.svg)](https://insarlite.readthedocs.io/)
 
 **InSARLite** is a comprehensive GUI application for Interferometric Synthetic Aperture Radar (InSAR) processing using the GMTSAR workflow. It provides an intuitive interface for processing Sentinel-1 SAR data to generate interferograms and perform time series analysis.
@@ -80,6 +81,8 @@ Dynamic: license-file
 - **📊 Advanced Visualization**: Professional plotting tools and time series analysis
 - **🔧 User-Friendly Interface**: Intuitive step-by-step workflow with progress tracking
 - **🖥️ Platform Support**: Optimized for Ubuntu Linux with WSL2 support for Windows
+- **🚀 Enhanced Performance**: Automatic GNU Parallel and SBAS Parallel installation
+- **🔄 WSL Auto-Configuration**: Automatic display configuration for all WSL versions
 
 ## 🚀 Quick Start
 
@@ -209,7 +212,7 @@ If you use InSARLite in your research, please cite:
   title={InSARLite: A GUI Application for GMTSAR-based InSAR Processing},
   author={Muhammad Badar Munir},
   year={2025},
-  version={1.0.0},
+  version={1.1.0},
   url={https://github.com/mbadarmunir/InSARLite},
   license={MIT}
 }

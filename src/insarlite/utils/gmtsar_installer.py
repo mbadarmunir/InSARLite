@@ -4,6 +4,94 @@ import tkinter as tk
 from tkinter import messagebox, filedialog
 
 
+def is_wsl():
+    """Check if running in Windows Subsystem for Linux."""
+    try:
+        # Check for WSL-specific files or environment variables
+        if os.path.exists('/proc/version'):
+            with open('/proc/version', 'r') as f:
+                content = f.read().lower()
+                return 'microsoft' in content or 'wsl' in content
+        return False
+    except:
+        return False
+
+
+def configure_wsl_display():
+    """Configure DISPLAY environment variable for WSL."""
+    if not is_wsl():
+        return
+    
+    bashrc = os.path.expanduser("~/.bashrc")
+    display_config = "\n# WSL Display configuration\nexport DISPLAY=:0\n"
+    
+    # Check if DISPLAY configuration already exists
+    try:
+        with open(bashrc, 'r') as f:
+            content = f.read()
+            if 'export DISPLAY=' in content:
+                print("DISPLAY variable already configured in .bashrc")
+                return
+    except FileNotFoundError:
+        pass
+    
+    # Add DISPLAY configuration
+    with open(bashrc, "a") as f:
+        f.write(display_config)
+    print("Added DISPLAY=:0 configuration for WSL")
+
+
+def install_sbas_parallel(gmtsar_dir):
+    """Install SBAS parallel with proper compilation flags."""
+    print("Installing SBAS parallel...")
+    
+    original_dir = os.getcwd()
+    sbas_dir = os.path.join(gmtsar_dir, "gmtsar")
+    
+    if not os.path.exists(sbas_dir):
+        print(f"Warning: SBAS directory not found at {sbas_dir}")
+        return
+    
+    os.chdir(sbas_dir)
+    
+    try:
+        # Check if sbas_parallel.c exists
+        if not os.path.exists("sbas_parallel.c"):
+            print("Warning: sbas_parallel.c not found, skipping SBAS parallel installation")
+            return
+        
+        # Clean previous builds
+        run_command("make clean")
+        
+        # Compile sbas_parallel.o with OpenMP support
+        compile_cmd = (
+            "gcc -fopenmp -O2 -Wall -m64 -fPIC -fno-strict-aliasing -std=c99 "
+            "-z muldefs -I/usr/include/gmt -I./ -I/usr/local/include "
+            "-c -o sbas_parallel.o sbas_parallel.c"
+        )
+        run_command(compile_cmd)
+        
+        # Link sbas_parallel executable
+        link_cmd = (
+            f"gcc -fopenmp -m64 -s -Wl,-rpath,/usr/lib/x86_64-linux-gnu "
+            f"-z muldefs sbas_parallel.o -L{gmtsar_dir}/gmtsar -lgmtsar "
+            "-L/usr/lib/x86_64-linux-gnu -lgmt -llapack -lblas -lm "
+            "-L/usr/local/lib -ltiff -lm -o sbas_parallel"
+        )
+        run_command(link_cmd)
+        
+        # Install sbas_parallel to system
+        run_command("sudo cp sbas_parallel /usr/local/bin/")
+        run_command("sudo chmod +x /usr/local/bin/sbas_parallel")
+        
+        print("SBAS parallel installed successfully")
+        
+    except Exception as e:
+        print(f"Warning: SBAS parallel installation failed: {e}")
+    finally:
+        os.chdir(original_dir)
+
+
 def run_command(cmd, cwd=None):
     """Run shell command with error handling."""
     print(f"Running: {cmd}")
@@ -23,7 +111,7 @@ def install_dependencies():
     pkgs = [
         "csh", "subversion", "autoconf", "libtiff5-dev", "libhdf5-dev", "wget",
         "liblapack-dev", "gfortran", "gfortran-9", "g++", "gcc-9", "libgmt-dev",
-        "gmt-dcw", "gmt-gshhg", "gmt"
+        "gmt-dcw", "gmt-gshhg", "gmt", "parallel"
     ]
     run_command(f"sudo apt-get update && sudo apt-get install -y {' '.join(pkgs)}")
 
@@ -87,6 +175,12 @@ def install_gmtsar(install_dir, orbits_dir, use_newer_ubuntu=True):
 
         run_command("make")
         run_command("sudo make install")
+
+        # Install SBAS parallel
+        install_sbas_parallel(gmtsar_dir)
+
+        # Configure WSL display if running in WSL
+        configure_wsl_display()
 
         # Add GMTSAR env vars to .bashrc
         bashrc = os.path.expanduser("~/.bashrc")

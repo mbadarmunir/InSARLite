@@ -15,6 +15,8 @@
 - **📊 Advanced Visualization**: Professional plotting tools and time series analysis
 - **🔧 User-Friendly Interface**: Intuitive step-by-step workflow with progress tracking
 - **🖥️ Platform Support**: Optimized for Ubuntu Linux with WSL2 support for Windows
+- **🚀 Enhanced Performance**: Automatic GNU Parallel and SBAS Parallel installation
+- **🔄 WSL Auto-Configuration**: Automatic display configuration for all WSL versions
 
 ## 🚀 Quick Start
 

@@ -260,6 +260,17 @@ python3 -c "import insarlite; insarlite.main()"
 ```
 
 ```{note}
+**Automatic WSL Configuration**: InSARLite automatically detects WSL environments and configures the DISPLAY variable (`export DISPLAY=:0`) for all WSL versions during GMTSAR installation.
+```
+
+```{note}
+**Enhanced GMTSAR Installation**: InSARLite now automatically installs:
+- **GNU Parallel** for enhanced processing performance
+- **SBAS Parallel** with OpenMP support for faster time series analysis
+- **WSL Display Configuration** for seamless GUI operation
+```
+
+```{note}
 **WSL Performance**: InSARLite in WSL2 provides near-native Linux performance. Store your data on the Linux filesystem (e.g., `/home/username/`) for optimal performance rather than on Windows drives (`/mnt/c/`).
 ```
 
@@ -445,12 +456,18 @@ echo 'export PATH=$GMTSAR/bin:$PATH' >> ~/.bashrc
    ```bash
    sudo apt install x11-utils x11-apps
    ```
-2. **Configure DISPLAY variable**:
+2. **Check automatic DISPLAY configuration**:
+   ```bash
+   # InSARLite automatically sets DISPLAY=:0 for WSL
+   echo $DISPLAY
+   source ~/.bashrc
+   ```
+3. **Manual DISPLAY configuration** (if automatic setup fails):
    ```bash
    echo 'export DISPLAY=:0' >> ~/.bashrc
    source ~/.bashrc
    ```
-3. **Install X11 server on Windows** (VcXsrv or Xming)
+4. **Install X11 server on Windows** (VcXsrv or Xming)
 
 ### InSARLite Issues
 
