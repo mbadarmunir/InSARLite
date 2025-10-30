@@ -74,7 +74,7 @@ class TimeSeriesWindow(tk.Toplevel):
         self.ts_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self.download_frame = tk.Frame(self)
         self.download_frame.pack(side=tk.TOP, fill=tk.X, pady=10)
-        self.btn_save_png = tk.Button(self.download_frame, text="Download Time Series PNG", command=self.save_png, state=tk.DISABLED)
+        self.btn_save_png = tk.Button(self.download_frame, text="Download Time Series (PNG+PS)", command=self.save_png, state=tk.DISABLED)
         self.btn_save_png.pack(side=tk.LEFT, padx=10)
         self.btn_save_csv = tk.Button(self.download_frame, text="Download Time Series CSV", command=self.save_csv, state=tk.DISABLED)
         self.btn_save_csv.pack(side=tk.LEFT, padx=10)
@@ -152,8 +152,51 @@ class TimeSeriesWindow(tk.Toplevel):
                                                  title="Save Time Series PNG")
         if file_path:
             try:
-                self.time_series_fig.savefig(file_path)
-                messagebox.showinfo("Saved", f"PNG saved to {file_path}")
+                # Save PNG file
+                self.time_series_fig.savefig(file_path, bbox_inches='tight', facecolor='white')
+                
+                # Also save vector files with improved quality
+                base_path = os.path.splitext(file_path)[0]
+                saved_formats = []
+                
+                try:
+                    # Configure matplotlib for vector output
+                    import matplotlib.pyplot as plt
+                    original_rcParams = {
+                        'pdf.fonttype': plt.rcParams.get('pdf.fonttype'),
+                        'ps.fonttype': plt.rcParams.get('ps.fonttype'),
+                        'svg.fonttype': plt.rcParams.get('svg.fonttype')
+                    }
+                    
+                    plt.rcParams['pdf.fonttype'] = 42  # TrueType fonts
+                    plt.rcParams['ps.fonttype'] = 42   # TrueType fonts  
+                    plt.rcParams['svg.fonttype'] = 'none'  # Preserve text as text
+                    
+                    # Save in multiple vector formats
+                    for fmt, ext in [('pdf', 'pdf'), ('svg', 'svg'), ('eps', 'eps'), ('ps', 'ps')]:
+                        try:
+                            vector_path = f"{base_path}.{ext}"
+                            self.time_series_fig.savefig(vector_path, format=fmt, bbox_inches='tight', 
+                                                       facecolor='white', rasterized=False)
+                            saved_formats.append(f"{fmt.upper()}: {vector_path}")
+                        except Exception as fmt_e:
+                            print(f"Warning: Could not save {fmt.upper()} time series plot: {fmt_e}")
+                    
+                    # Restore original rcParams
+                    for key, value in original_rcParams.items():
+                        if value is not None:
+                            plt.rcParams[key] = value
+                    
+                    if saved_formats:
+                        vector_list = "\n".join(saved_formats)
+                        messagebox.showinfo("Saved", f"PNG saved to {file_path}\n\nVector formats:\n{vector_list}")
+                    else:
+                        messagebox.showinfo("Saved", f"PNG saved to {file_path}\n(Vector save failed)")
+                        
+                except Exception as vector_e:
+                    print(f"Warning: Could not save vector files: {vector_e}")
+                    messagebox.showinfo("Saved", f"PNG saved to {file_path}\n(Vector save failed: {vector_e})")
+                    
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to save PNG:\n{e}")
 

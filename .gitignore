@@ -6,6 +6,11 @@ src/config_part.json
 imported_libraries.txt
 src/src180625.zip
 
+# Python implementation of GMTSAR scripts (not for distribution)
+src/insarlite/gmtsar_gui/intf_tops.py
+src/insarlite/gmtsar_gui/intf.py
+src/insarlite/gmtsar_gui/phasediff.py
+
 # Documentation build outputs
 docs/build/
 docs/source/_build/
@@ -66,5 +71,6 @@ ehthumbs.db
 Thumbs.db
 
 # Development summaries (moved to dev_summaries folder)
+dev_summaries/
 *_SUMMARY.md
 ENHANCED_PLOTTING_GUIDE.md

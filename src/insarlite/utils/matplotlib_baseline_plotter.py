@@ -195,32 +195,37 @@ class InteractiveBaselinePlotter:
             self.ax.xaxis.set_minor_locator(mdates.MonthLocator())
         
     def _plot_baseline_points(self):
-        """Plot the baseline points with enhanced styling."""
+        """Plot the baseline points with enhanced styling for vector graphics."""
         if not self.dates or not self.perp_baselines:
             self.ax.text(0.5, 0.5, 'No valid data to plot', 
                         transform=self.ax.transAxes, ha='center', va='center',
                         fontsize=16, color='red')
             return
             
-        # Plot points with optimized sizing
+        # Plot points optimized for vector graphics
         dates_np = np.array(self.dates)
         baselines_np = np.array(self.perp_baselines)
         
-        # Optimized point size for better visibility and selection
+        # Create scatter plot with vector-friendly settings
         self.point_scatter = self.ax.scatter(dates_np, baselines_np, 
-                                           s=50, c='steelblue', alpha=0.9, 
+                                           s=50, c='steelblue', alpha=1.0,  # Full opacity for vectors
                                            edgecolors='navy', linewidths=1.2,
-                                           zorder=10, label='Image dates')  # Higher zorder than edges
+                                           zorder=10, label='Image dates',
+                                           marker='o',  # Explicit circle marker
+                                           rasterized=False)  # Ensure vector rendering
         
-        # Add date labels for each point with smaller font
+        # Add date labels with vector-friendly text
         for i, (date, baseline) in enumerate(zip(self.dates, self.perp_baselines)):
             self.ax.annotate(date.strftime('%d/%m'), 
                            (date, baseline), 
                            xytext=(3, 3), textcoords='offset points',
-                           fontsize=7, alpha=0.6, ha='left')  # Smaller, more subtle labels
+                           fontsize=7, alpha=0.8, ha='left',  # Higher alpha for vectors
+                           family='sans-serif',  # Explicit font family
+                           rasterized=False)  # Ensure vector text
         
-        # Add legend
-        self.ax.legend(loc='upper right', framealpha=0.9)
+        # Add legend with vector settings
+        legend = self.ax.legend(loc='upper right', framealpha=0.9)
+        legend.set_rasterized(False)  # Ensure vector legend
         
     def _setup_event_handlers(self):
         """Set up matplotlib event handlers for interactivity."""
@@ -249,7 +254,6 @@ class InteractiveBaselinePlotter:
         node_clicked = self._check_node_click(event)
         
         if node_clicked is not None:
-            print(f"Node {node_clicked} clicked!")  # Debug
             # Universal Rule 1: Clear any edge selection first
             if self.selected_edge:
                 self._deselect_edge()
@@ -262,12 +266,10 @@ class InteractiveBaselinePlotter:
             edge_clicked = self._check_edge_click(event)
             
             if edge_clicked:
-                print(f"Edge clicked! Between points {edge_clicked['idx1']} and {edge_clicked['idx2']}")  # Debug
                 # Universal Rule 1: Clear all node selections first
                 self._clear_all_node_selections()
                 self._select_edge(edge_clicked)
             else:
-                print("Empty space clicked")  # Debug
                 # Clear all selections when clicking empty space
                 self._clear_all_selections()
                 
@@ -323,9 +325,6 @@ class InteractiveBaselinePlotter:
                 
                 if not edge_exists:
                     self._create_edge(other_idx, node_idx)
-                    print(f"Created edge between points {other_idx} and {node_idx}")  # Debug
-                else:
-                    print(f"Edge already exists between points {other_idx} and {node_idx}")  # Debug
                 
                 # Always deselect both points after attempting edge creation
                 self._deselect_point(other_idx)
@@ -462,7 +461,7 @@ class InteractiveBaselinePlotter:
         self._draw_with_rotation()
         
     def _create_edge(self, idx1, idx2):
-        """Create an edge between two points."""
+        """Create an edge between two points optimized for vector graphics."""
         # Check if edge already exists
         for edge in self.edges:
             if (edge['idx1'] == idx1 and edge['idx2'] == idx2) or \
@@ -472,11 +471,14 @@ class InteractiveBaselinePlotter:
         point1 = self.points[idx1]
         point2 = self.points[idx2]
         
-        # Create line object with optimized styling
+        # Create line object optimized for vector graphics
         line, = self.ax.plot([point1['date'], point2['date']], 
                            [point1['baseline'], point2['baseline']], 
-                           'k-', linewidth=1.0, alpha=0.6,
-                           zorder=1)  # Lower zorder than points
+                           'k-', linewidth=1.0, alpha=1.0,  # Full opacity for vectors
+                           zorder=1,  # Lower zorder than points
+                           solid_capstyle='round',  # Vector-friendly line caps
+                           solid_joinstyle='round',  # Vector-friendly line joins
+                           rasterized=False)  # Ensure vector rendering
         
         # Store edge data
         edge = {
@@ -541,15 +543,12 @@ class InteractiveBaselinePlotter:
                     min_distance = distance
                     closest_edge = edge
                     
-            except Exception as e:
-                print(f"Edge detection error: {e}")  # Debug
+            except Exception:
                 continue
                 
         if min_distance <= edge_threshold:
-            print(f"Edge found! Distance: {min_distance:.1f}px, Threshold: {edge_threshold}px")  # Debug
             return closest_edge
                 
-        print(f"No edge found. Min distance: {min_distance:.1f}px")  # Debug
         return None
         
     def _point_to_line_distance_display(self, px, py, x1, y1, x2, y2):
@@ -727,16 +726,114 @@ class InteractiveBaselinePlotter:
             edge_list.append((file_id1, file_id2))
         return edge_list
         
-    def save_plot(self, filepath, dpi=300):
+    def save_plot(self, filepath, dpi=300, save_vector=True):
         """
-        Save the current plot to file.
+        Save the current plot to file with true vector graphics support.
         
         Args:
-            filepath: Output file path
+            filepath: Output file path (PNG)
             dpi: Resolution for raster formats
+            save_vector: If True, also save vector formats (PDF, EPS, SVG)
         """
+        import matplotlib
+        import matplotlib.pyplot as plt
+        
+        # Save PNG file with high quality
         self.figure.savefig(filepath, dpi=dpi, bbox_inches='tight', 
                           facecolor='white', edgecolor='none')
+        
+        # Save vector files with true vector graphics if requested
+        if save_vector:
+            base_path = os.path.splitext(filepath)[0]
+            
+            # Store original rcParams to restore later
+            original_rcParams = {}
+            
+            # Configure matplotlib for optimal vector output
+            vector_rcParams = {
+                'pdf.use14corefonts': True,     # Use PDF core fonts
+                'pdf.fonttype': 42,             # Embed fonts as TrueType (scalable)
+                'ps.fonttype': 42,              # Embed fonts as TrueType in PostScript
+                'svg.fonttype': 'none',         # Don't convert text to paths in SVG
+                'text.usetex': False,           # Avoid LaTeX complexity
+                'ps.useafm': True,              # Better font handling
+                'font.size': 10,                # Readable font size
+                'axes.linewidth': 0.8,          # Clean line rendering
+                'lines.linewidth': 1.0         # Proper line thickness
+            }
+            
+            # Temporarily set vector-optimized parameters
+            for key, value in vector_rcParams.items():
+                if key in plt.rcParams:
+                    original_rcParams[key] = plt.rcParams.get(key)
+                    plt.rcParams[key] = value
+            
+            vector_formats = [
+                ('pdf', 'PDF', 'pdf'),
+                ('svg', 'SVG', 'svg'),
+                ('eps', 'EPS', 'eps'),
+                ('ps', 'PostScript', 'ps')
+            ]
+            
+            for fmt, name, ext in vector_formats:
+                vector_path = f"{base_path}.{ext}"
+                try:
+                    # Configure specific format settings
+                    save_kwargs = {
+                        'format': fmt,
+                        'bbox_inches': 'tight',
+                        'facecolor': 'white',
+                        'edgecolor': 'none',
+                        'transparent': False,
+                        'pad_inches': 0.1
+                    }
+                    
+                    # Add format-specific optimizations
+                    if fmt == 'pdf':
+                        save_kwargs.update({
+                            'metadata': {
+                                'Creator': 'InSARLite',
+                                'Title': 'Baseline Network Plot',
+                                'Subject': 'InSAR Baseline Analysis'
+                            }
+                        })
+                    elif fmt == 'svg':
+                        save_kwargs.update({
+                            'metadata': {
+                                'Creator': 'InSARLite',
+                                'Date': None  # Use current date
+                            }
+                        })
+                    elif fmt in ['eps', 'ps']:
+                        # Determine optimal orientation and paper size
+                        fig_width, fig_height = self.figure.get_size_inches()
+                        if fig_width > fig_height:
+                            orientation = 'landscape'
+                            papertype = 'a3' if (fig_width > 11 or fig_height > 8.5) else 'letter'
+                        else:
+                            orientation = 'portrait' 
+                            papertype = 'a3' if (fig_height > 11 or fig_width > 8.5) else 'letter'
+                        
+                        save_kwargs.update({
+                            'orientation': orientation,
+                            'papertype': papertype
+                        })
+                    
+                    self.figure.savefig(vector_path, **save_kwargs)
+                    
+                    # Verify file was created and is not empty
+                    if os.path.exists(vector_path) and os.path.getsize(vector_path) > 0:
+                        print(f"Vector plot ({name}) saved to {vector_path}")
+                    else:
+                        print(f"Warning: {name} file creation failed or is empty")
+                        
+                except Exception as e:
+                    print(f"Warning: Could not save {name} format: {e}")
+            
+            # Restore original rcParams
+            for key, value in original_rcParams.items():
+                if value is not None:
+                    plt.rcParams[key] = value
         
     def get_statistics(self):
         """Get network statistics."""

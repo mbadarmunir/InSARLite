@@ -25,6 +25,7 @@ import glob
 # Function to run commands in parallel
 def execute_command(command, log_func=None, process_num=None):
     # Execute bash command
+    print(f"Executing command: {command}")
     process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     output, error = process.communicate()
     if log_func:
@@ -833,27 +834,55 @@ def check_align_completion(subswathdir):
                 print(f"✅ Alignment completed successfully for {subswathdir}")
                 return True    
         
-def check_ifgs_completion(subswathdir):
+def check_ifgs_completion(subswathdir, verbose=True):
+    """Check if all interferograms are completed by verifying corr.grd files exist."""
     intf = os.path.join(subswathdir, "intf.in")
     ifg_dir = os.path.join(subswathdir, "intf_all")
     intf_count = None
+    
     if not os.path.exists(ifg_dir):
-        print(f"❌ No IFGs generated for {subswathdir}")
+        if verbose:
+            print(f"❌ No IFGs generated for {subswathdir}")
         return False
     if not os.path.exists(intf):
-        print(f"❌ Missing {intf} for {subswathdir}")
+        if verbose:
+            print(f"❌ Missing {intf} for {subswathdir}")
         return False
     else:
         with open(intf, "r") as f:
             intf_count = sum(1 for _ in f)
-        # List all subdirectories in ifg_dir
+        
+        # List all subdirectories in ifg_dir that have completed interferograms (corr.grd exists)
+        completed_ifgs = []
         subdirs = [d for d in os.listdir(ifg_dir) if os.path.isdir(os.path.join(ifg_dir, d))]
-        if intf_count and len(subdirs) != intf_count:
-            print(f"❌ Only {len(subdirs)} out of {intf_count} IFGs present for {subswathdir}")
+        
+        for subdir in subdirs:
+            corr_file = os.path.join(ifg_dir, subdir, "corr.grd")
+            if os.path.exists(corr_file):
+                completed_ifgs.append(subdir)
+        
+        if intf_count and len(completed_ifgs) != intf_count:
+            if verbose:
+                print(f"❌ Only {len(completed_ifgs)} out of {intf_count} IFGs completed for {subswathdir}")
             return False
         else:
-            print(f"✅ All IFGs present for {subswathdir}")
+            if verbose:
+                print(f"✅ All {len(completed_ifgs)} IFGs completed for {subswathdir}")
             return True
+
+def check_first_ifg_completion(subswathdir, verbose=False):
+    """Check if first interferogram generation is completed by verifying topo_ra.grd exists."""
+    topo_dir = os.path.join(subswathdir, "topo")
+    topo_ra_file = os.path.join(topo_dir, "topo_ra.grd")
+    
+    if os.path.exists(topo_ra_file):
+        if verbose:
+            print(f"✅ First IFG completed for {subswathdir} (topo_ra.grd found)")
+        return True
+    else:
+        if verbose:
+            print(f"❌ First IFG not completed for {subswathdir} (topo_ra.grd missing)")
+        return False
         
 def check_merge_completion(indir):
     intf = os.path.join(indir, "F2", "intf.in")
@@ -1395,3 +1424,177 @@ def analyze_flight_directions(safe_dirs, zip_files):
         'direction': direction,
         'details': details
     }
+
+
+###########################################################################
+###################### PRM FILE VALIDATION FUNCTIONS ####################
+###########################################################################
+
+def parse_prm_file(prm_file_path):
+    """Parse a PRM file and return parameter dictionary."""
+    prm_dict = {}
+    
+    if not os.path.exists(prm_file_path):
+        raise FileNotFoundError(f"PRM file not found: {prm_file_path}")
+    
+    with open(prm_file_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if '=' in line and not line.startswith('#'):
+                key, value = line.split('=', 1)
+                key = key.strip()
+                value = value.strip()
+                prm_dict[key] = value
+    
+    return prm_dict
+
+
+def get_universal_similarities():
+    """
+    Return the list of PRM parameters that should be consistent across all files in a project.
+    These are derived from analysis of valid PRM files, excluding time-dependent and file-specific parameters.
+    
+    Excluded parameters (may vary during processing):
+    - a_stretch_a, a_stretch_r: Azimuth stretch parameters
+    - stretch_a, stretch_r: Image stretch parameters  
+    - sub_int_a: Sub-integer azimuth adjustment
+    """
+    return {
+        'Flip_iq': 'n',
+        'I_mean': '0',
+        'PRF': '486.486310',
+        'Q_mean': '0',
+        'SC_identity': '10',
+        'SLC_scale': '1.000000',
+        'ashift': '0',
+        'az_res': '0.000000',
+        'bytes_per_line': '85312',
+        'caltone': '0.000000',
+        'chirp_ext': '0',
+        'chirp_slope': '1.07815e+12',
+        'deskew': 'n',
+        'dtype': 'a',
+        'equatorial_radius': '6378137.000000',
+        'fd1': '0.000000',
+        'fdd1': '0.000000',
+        'fddd1': '0.000000',
+        'first_line': '1',
+        'first_sample': '347',
+        'good_bytes_per_line': '85312',
+        'lookdir': 'R',
+        'near_range': '799776.509051',
+        'nlooks': '1',
+        'nrows': '12192',
+        'num_lines': '12192',
+        'num_patches': '1',
+        'num_rng_bins': '21328',
+        'num_valid_az': '12192',
+        'offset_video': 'n',
+        'orbdir': 'A',
+        'polar_radius': '6356752.310000',
+        'pulse_dur': '5.240481e-05',
+        'radar_wavelength': '0.0554658',
+        'rm_az_band': '0.000000',
+        'rm_rng_band': '0.200000',
+        'rng_samp_rate': '64345238.125714',
+        'rng_spec_wgt': '1.000000',
+        'rshift': '0',
+        'scnd_rng_mig': '0',
+        'st_rng_bin': '1',
+        'sub_int_r': '0.000000'
+    }
+
+
+def get_universal_similarity_keys():
+    """Return only the parameter names that should be consistent across PRM files."""
+    return list(get_universal_similarities().keys())
+
+
+def compare_prm_universal_similarities(prm_file1, prm_file2, verbose=True):
+    """
+    Compare two PRM files and report differences in universal similarities.
+    
+    Args:
+        prm_file1 (str): Path to first PRM file
+        prm_file2 (str): Path to second PRM file
+        verbose (bool): Whether to print detailed output
+        
+    Returns:
+        dict: Dictionary containing comparison results
+    """
+    try:
+        # Parse both PRM files
+        prm1 = parse_prm_file(prm_file1)
+        prm2 = parse_prm_file(prm_file2)
+        
+        # Get universal similarity parameters
+        universal_keys = get_universal_similarity_keys()
+        
+        differences = []
+        missing_in_prm1 = []
+        missing_in_prm2 = []
+        
+        # Check each universal parameter
+        for key in universal_keys:
+            if key in prm1 and key in prm2:
+                if prm1[key] != prm2[key]:
+                    differences.append({
+                        'parameter': key,
+                        'file1_value': prm1[key],
+                        'file2_value': prm2[key]
+                    })
+            elif key in prm1:
+                missing_in_prm2.append(key)
+            elif key in prm2:
+                missing_in_prm1.append(key)
+            else:
+                # Both files missing this parameter - could be normal
+                pass
+        
+        # Prepare results
+        results = {
+            'file1': os.path.basename(prm_file1),
+            'file2': os.path.basename(prm_file2),
+            'differences': differences,
+            'missing_in_file1': missing_in_prm1,
+            'missing_in_file2': missing_in_prm2,
+            'has_differences': len(differences) > 0 or len(missing_in_prm1) > 0 or len(missing_in_prm2) > 0
+        }
+        
+        if verbose:
+            print(f"\n=== Comparing Universal Similarities ===")
+            print(f"File 1: {prm_file1}")
+            print(f"File 2: {prm_file2}")
+            
+            if not results['has_differences']:
+                print("✅ All universal similarities match!")
+            else:
+                print("❌ Found differences in universal similarities:")
+                
+                if differences:
+                    print(f"\n  Parameter Value Differences ({len(differences)}):")
+                    for diff in differences:
+                        print(f"    {diff['parameter']}: '{diff['file1_value']}' vs '{diff['file2_value']}'")
+                
+                if missing_in_prm1:
+                    print(f"\n  Missing in {os.path.basename(prm_file1)} ({len(missing_in_prm1)}):")
+                    for param in missing_in_prm1:
+                        print(f"    {param}")
+                
+                if missing_in_prm2:
+                    print(f"\n  Missing in {os.path.basename(prm_file2)} ({len(missing_in_prm2)}):")
+                    for param in missing_in_prm2:
+                        print(f"    {param}")
+        
+        return results
+        
+    except Exception as e:
+        error_msg = f"Error comparing PRM files: {e}"
+        if verbose:
+            print(error_msg)
+        return {
+            'file1': os.path.basename(prm_file1) if os.path.exists(prm_file1) else prm_file1,
+            'file2': os.path.basename(prm_file2) if os.path.exists(prm_file2) else prm_file2,
+            'error': error_msg,
+            'has_differences': True
+        }

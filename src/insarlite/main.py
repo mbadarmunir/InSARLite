@@ -6,6 +6,7 @@ import tkinter as tk
 from tkinter import messagebox
 from tkcalendar import DateEntry
 from tkintermapview import TkinterMapView
+import glob
 from .utils.utils import (
     browse_folder, browse_file, extr_ext_TL, configure_zooming_ui,
     submit_gacos_batch, estimate_s1_slc_frames,
@@ -2459,6 +2460,16 @@ class InSARLiteApp:
         align_Ifggen_window.protocol("WM_DELETE_WINDOW", lambda: None)
         align_Ifggen_window.transient(self.root)
         align_Ifggen_window.grab_set()
+
+    # Store subswath paths for use by other methods
+    def _store_subswath_paths(self):
+        """Store subswath paths as instance variables for later use."""
+        for key in ['pF1', 'pF2', 'pF3', 'pmerge']:
+            path = self.paths.get(key)
+            if path and os.path.exists(path):
+                setattr(self, key, path)
+            else:
+                setattr(self, key, None)
 
 
     def _show_unwrap_app(self):

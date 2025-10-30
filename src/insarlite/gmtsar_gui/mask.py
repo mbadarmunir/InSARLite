@@ -432,8 +432,11 @@ class GrdViewer(tk.Toplevel):
             return
 
         base = os.path.splitext(os.path.basename(self.filename))[0] if self.filename else "output"
+        # Generate output file paths for both PNG and PS
         png1 = os.path.join(export_dir, f"{base}_mean_correlation.png")
         png2 = os.path.join(export_dir, f"{base}_mask.png")
+        ps1 = os.path.join(export_dir, f"{base}_mean_correlation.ps")
+        ps2 = os.path.join(export_dir, f"{base}_mask.ps")
         grd_out = os.path.join(export_dir, "mask_def.grd")
 
         # Export left plot (mean correlation)
@@ -458,7 +461,41 @@ class GrdViewer(tk.Toplevel):
         ax1.set_ylabel("Azimuth")
         ax1.axis('on')
         fig1.tight_layout()
-        fig1.savefig(png1, dpi=300)
+        fig1.savefig(png1, dpi=300, bbox_inches='tight', facecolor='white')
+        # Save vector versions with improved quality
+        try:
+            # Save multiple vector formats for compatibility
+            base_path1 = os.path.splitext(ps1)[0]
+            
+            # Configure matplotlib for vector output
+            import matplotlib.pyplot as plt
+            original_rcParams = {
+                'pdf.fonttype': plt.rcParams.get('pdf.fonttype'),
+                'ps.fonttype': plt.rcParams.get('ps.fonttype'),
+                'svg.fonttype': plt.rcParams.get('svg.fonttype')
+            }
+            
+            plt.rcParams['pdf.fonttype'] = 42  # TrueType fonts
+            plt.rcParams['ps.fonttype'] = 42   # TrueType fonts  
+            plt.rcParams['svg.fonttype'] = 'none'  # Preserve text as text
+            
+            # Save in multiple vector formats
+            for fmt, ext in [('pdf', 'pdf'), ('svg', 'svg'), ('eps', 'eps'), ('ps', 'ps')]:
+                try:
+                    vector_path = f"{base_path1}.{ext}"
+                    fig1.savefig(vector_path, format=fmt, bbox_inches='tight', 
+                               facecolor='white', rasterized=False)
+                    print(f"Vector correlation plot ({fmt.upper()}) saved to {vector_path}")
+                except Exception as fmt_e:
+                    print(f"Warning: Could not save {fmt.upper()} correlation plot: {fmt_e}")
+            
+            # Restore original rcParams
+            for key, value in original_rcParams.items():
+                if value is not None:
+                    plt.rcParams[key] = value
+                    
+        except Exception as e:
+            print(f"Warning: Could not save vector correlation plots: {e}")
         plt.close(fig1)
 
         # Export middle plot (mask) with vertically flipped mask
@@ -483,7 +520,41 @@ class GrdViewer(tk.Toplevel):
         ax2.set_ylabel("Azimuth")
         ax2.axis('on')
         fig2.tight_layout()
-        fig2.savefig(png2, dpi=300)
+        fig2.savefig(png2, dpi=300, bbox_inches='tight', facecolor='white')
+        # Save vector versions with improved quality
+        try:
+            # Save multiple vector formats for compatibility
+            base_path2 = os.path.splitext(ps2)[0]
+            
+            # Configure matplotlib for vector output
+            import matplotlib.pyplot as plt
+            original_rcParams = {
+                'pdf.fonttype': plt.rcParams.get('pdf.fonttype'),
+                'ps.fonttype': plt.rcParams.get('ps.fonttype'),
+                'svg.fonttype': plt.rcParams.get('svg.fonttype')
+            }
+            
+            plt.rcParams['pdf.fonttype'] = 42  # TrueType fonts
+            plt.rcParams['ps.fonttype'] = 42   # TrueType fonts  
+            plt.rcParams['svg.fonttype'] = 'none'  # Preserve text as text
+            
+            # Save in multiple vector formats
+            for fmt, ext in [('pdf', 'pdf'), ('svg', 'svg'), ('eps', 'eps'), ('ps', 'ps')]:
+                try:
+                    vector_path = f"{base_path2}.{ext}"
+                    fig2.savefig(vector_path, format=fmt, bbox_inches='tight', 
+                               facecolor='white', rasterized=False)
+                    print(f"Vector mask plot ({fmt.upper()}) saved to {vector_path}")
+                except Exception as fmt_e:
+                    print(f"Warning: Could not save {fmt.upper()} mask plot: {fmt_e}")
+            
+            # Restore original rcParams
+            for key, value in original_rcParams.items():
+                if value is not None:
+                    plt.rcParams[key] = value
+                    
+        except Exception as e:
+            print(f"Warning: Could not save vector mask plots: {e}")
         plt.close(fig2)
 
 
@@ -516,7 +587,7 @@ class GrdViewer(tk.Toplevel):
         else:
             self.save_mask_as_grd(self.ds, mask, grd_out)
 
-        messagebox.showinfo("Export", f"Exported:\n{png1}\n{png2}\n{grd_out}")
+        messagebox.showinfo("Export", f"Exported:\n{png1} (+ .ps)\n{png2} (+ .ps)\n{grd_out}")
         self.on_closing()
 
 

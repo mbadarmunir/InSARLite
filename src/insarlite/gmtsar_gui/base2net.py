@@ -366,8 +366,13 @@ class BaselineGUI:
         self.root.grid_columnconfigure(1, weight=1)
         
         try:
+            # Force reload of matplotlib baseline plotter to ensure latest version
+            import importlib
+            from ..utils import matplotlib_baseline_plotter
+            importlib.reload(matplotlib_baseline_plotter)
+            
             # Create the interactive matplotlib plotter
-            self.plotter = create_interactive_baseline_plot(self.plot_frame, baseline_table_path)
+            self.plotter = matplotlib_baseline_plotter.create_interactive_baseline_plot(self.plot_frame, baseline_table_path)
             
             # Set up callbacks
             self.plotter.on_edge_changed = self._on_edges_changed
@@ -817,8 +822,29 @@ class BaselineGUI:
             export_btn.pack(pady=10)
             add_tooltip(export_btn, "Save interferometric pairs to intf.in files\nExports baseline plot and completes network design\nClick when satisfied with pair selection")
 
+    def _save_baseline_plot(self, primary_dir):
+        """Save baseline plot in both PNG and vector formats."""
+        if not self.plotter:
+            return
+            
+        # Save the matplotlib plot (PNG and vector formats)
+        plot_path = os.path.join(primary_dir, "baseline_network_plot.png")
+        
+        try:
+            # Use the plotter's enhanced save method with vector support
+            self.plotter.save_plot(plot_path, dpi=300, save_vector=True)
+            print(f"Baseline plots saved to {primary_dir}")
+                    
+        except Exception as e:
+            print(f"Warning: Could not save plot: {e}")
+
     def _on_export_edges(self, primary_dir=None):
         """Export edge list and save plot using matplotlib plotter."""
+        
+        # Always save the plot first, regardless of config status
+        if self.plotter:
+            self._save_baseline_plot(primary_dir)
+        
         # If user chose to use previous config, skip writing intf.in
         conf = self._load_config()
         prev_mst = conf.get("mst")
@@ -830,7 +856,7 @@ class BaselineGUI:
             and self.esd_mode_var.get() == prev_esd
             and os.path.exists(os.path.join(primary_dir, "intf.in"))
         ):
-            # Only call callback and close, skip writing intf.in and plot
+            # Only call callback and close, skip writing intf.in (plot already saved above)
             if self.on_edges_exported:
                 self.on_edges_exported(self.mst, self.align_mode_var.get(), self.esd_mode_var.get())
                 self._save_config()
@@ -852,13 +878,8 @@ class BaselineGUI:
                 f.write(pair + "\n")
         print(f"Edge list saved to {intf_path}")
         
-        # Save the matplotlib plot
-        plot_path = os.path.join(primary_dir, "baseline_network_plot.png")
-        try:
-            self.plotter.save_plot(plot_path, dpi=300)
-            print(f"Baseline plot saved to {plot_path}")
-        except Exception as e:
-            print(f"Warning: Could not save plot: {e}")
+        # Save the matplotlib plot (already called above, but call again in case primary_dir changed)
+        self._save_baseline_plot(primary_dir)
             
         # Display final statistics
         stats = self.plotter.get_statistics()
