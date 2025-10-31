@@ -3,6 +3,7 @@
 [![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/badge/version-1.2.1-blue.svg)](https://github.com/mbadarmunir/InSARLite/releases)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17481377.svg)](https://doi.org/10.5281/zenodo.17481377)
 [![Documentation](https://img.shields.io/badge/docs-available-brightgreen.svg)](https://insarlite.readthedocs.io/)
 
 **InSARLite** is a comprehensive GUI application for Interferometric Synthetic Aperture Radar (InSAR) processing using the GMTSAR workflow. It provides an intuitive interface for processing Sentinel-1 SAR data to generate interferograms and perform time series analysis.
@@ -141,14 +142,47 @@ InSARLite is released under the [MIT License](LICENSE). This allows free use, mo
 
 If you use InSARLite in your research, please cite:
 
+**Zenodo DOI:**
+```
+Munir, Muhammad Badar. (2025). InSARLite: A GUI Application for GMTSAR-based InSAR Processing (v1.2.1). 
+Zenodo. https://doi.org/10.5281/zenodo.17481377
+```
+
+**BibTeX:**
 ```bibtex
 @software{insarlite2025,
   title={InSARLite: A GUI Application for GMTSAR-based InSAR Processing},
   author={Muhammad Badar Munir},
   year={2025},
-  version={1.1.0},
+  version={1.2.1},
   url={https://github.com/mbadarmunir/InSARLite},
+  doi={10.5281/zenodo.17481377},
   license={MIT}
+}
+```
+
+## 🙏 Acknowledgments
+
+**InSARLite is built on the foundation of [GMTSAR](https://github.com/gmtsar/gmtsar)** - an excellent open-source InSAR processing system developed by the GMTSAR team at Scripps Institution of Oceanography, UC San Diego.
+
+**Special appreciation to:**
+- **GMTSAR Development Team** - For creating and maintaining the robust SAR processing toolkit that powers InSARLite
+- **Dr. David Sandwell** and **Dr. Xiaopeng Tong** - For their leadership in GMTSAR development
+- **The entire GMTSAR community** - For continuous improvements, bug fixes, and scientific contributions
+
+InSARLite serves as a user-friendly interface to GMTSAR's powerful capabilities, making advanced InSAR processing more accessible to researchers and practitioners worldwide. Without GMTSAR's solid foundation, InSARLite would not exist.
+
+**GMTSAR Citation:**
+```bibtex
+@article{sandwell2011open,
+  title={Open radar interferometry software for mapping surface deformation},
+  author={Sandwell, David and Mellors, Robert and Tong, Xiaopeng and Wei, Meng and Wessel, Paul},
+  journal={Eos, Transactions American Geophysical Union},
+  volume={92},
+  number={28},
+  pages={234--234},
+  year={2011},
+  publisher={Wiley Online Library}
 }
 ```
 
