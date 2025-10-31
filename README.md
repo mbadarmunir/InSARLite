@@ -124,14 +124,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 InSARLite is released under the [MIT License](LICENSE). This allows free use, modification, and distribution for both academic and commercial purposes.
 
-## 🙏 Acknowledgments
-
-- **GMTSAR Team** - For the powerful InSAR processing engine
-- **NASA/ESA** - For providing open access to Sentinel-1 data
-- **Python Community** - For the excellent scientific computing ecosystem
-- **Contributors** - For bug reports, features, and improvements
-
-## 📧 Support
+##  Support
 
 - **Documentation**: [insarlite.readthedocs.io](https://insarlite.readthedocs.io/)
 - **Issues**: [GitHub Issues](https://github.com/mbadarmunir/InSARLite/issues)
