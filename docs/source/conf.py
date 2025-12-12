@@ -15,8 +15,8 @@ sys.path.insert(0, os.path.abspath('../../src'))
 project = 'InSARLite'
 copyright = '2025, Muhammad Badar Munir'
 author = 'Muhammad Badar Munir'
-release = '1.0.0'
-version = '1.0.0'
+release = '1.3.0'
+version = '1.3'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -87,7 +87,6 @@ html_favicon = None
 html_theme_options = {
     'canonical_url': 'https://insarlite.readthedocs.io/',
     'logo_only': False,
-    'display_version': True,
     'prev_next_buttons_location': 'bottom',
     'style_external_links': False,
     'style_nav_header_background': '#2980b9',

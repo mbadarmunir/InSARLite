@@ -18,10 +18,6 @@ import numpy as np
 import glob
 
 
-
-# CONFIG_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.json")
-# CONFIG_FILE_PART = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config_part.json")
-
 # Function to run commands in parallel
 def execute_command(command, log_func=None, process_num=None):
     # Execute bash command
@@ -50,21 +46,93 @@ def log_message(log_file_path, message):
     with open(log_file_path, "a") as log_file:
         log_file.write(message + "\n")
 
+# Function to format UI parameters for logging
+def format_ui_parameters(ui_params):
+    """
+    Format UI parameters dictionary into a readable string for logging.
+    
+    Args:
+        ui_params (dict): Dictionary of UI parameters
+        
+    Returns:
+        str: Formatted string with UI parameters
+    """
+    if not ui_params:
+        return None
+    
+    lines = ["UI Parameters:"]
+    for key, value in ui_params.items():
+        if value is not None and str(value).strip():
+            # Handle different types of parameters
+            if isinstance(value, (list, tuple)):
+                value_str = ", ".join(str(v) for v in value)
+            elif isinstance(value, dict):
+                value_str = json.dumps(value, indent=2)
+            else:
+                value_str = str(value)
+            
+            # Format parameter name for readability
+            formatted_key = key.replace('_', ' ').title()
+            lines.append(f"  - {formatted_key}: {value_str}")
+    
+    return "\n".join(lines) if len(lines) > 1 else None
+
+# Function to save UI configuration to JSON file
+def save_config_to_json(config_path, config_data, step_name=None):
+    """
+    Save or update configuration data in JSON file.
+    
+    Args:
+        config_path (str): Path to config JSON file
+        config_data (dict): Configuration data to save
+        step_name (str): Optional step name to organize configs by processing step
+    """
+    try:
+        # Load existing config if it exists
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                existing_config = json.load(f)
+        else:
+            existing_config = {}
+        
+        # Update timestamp
+        config_data['timestamp'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Save under step name if provided
+        if step_name:
+            if 'steps' not in existing_config:
+                existing_config['steps'] = {}
+            existing_config['steps'][step_name] = config_data
+        else:
+            # Merge with existing config
+            existing_config.update(config_data)
+        
+        # Write updated config
+        with open(config_path, 'w') as f:
+            json.dump(existing_config, f, indent=2)
+            
+        print(f"Configuration saved to {config_path}")
+        
+    except Exception as e:
+        print(f"Warning: Could not save configuration to {config_path}: {e}")
+
 # Enhanced process logger
 def process_logger(
     message=None,
     process_num=None,
     mode="none",  # "start", "end", or "none"
-    log_file=None
+    log_file=None,
+    ui_params=None  # Dictionary of UI parameters to log
 ):
     """
-    Logs and prints process messages with optional timing.
+    Logs and prints process messages with optional timing and UI parameters.
 
     Args:
         message (str): Message to log/print.
         process_num (str|int): Process number (e.g., 1, 4, 4.2.2).
         mode (str): "start", "end", or "none" for process timing.
         log_file (str): Full path to log file. Log file management is external.
+        ui_params (dict): Dictionary of UI parameters to log with start messages.
     """
     # Static dict to store process start times
     if not hasattr(process_logger, "_state"):
@@ -80,6 +148,13 @@ def process_logger(
         print(msg)
         if log_file:
             log_message(log_file, msg)
+        
+        # Log UI parameters immediately after start message
+        if ui_params and log_file:
+            ui_msg = format_ui_parameters(ui_params)
+            if ui_msg:
+                print(ui_msg)
+                log_message(log_file, ui_msg)
         return
 
     if process_num and mode == "end":
@@ -97,6 +172,34 @@ def process_logger(
 
     # Generic message (no process_num or just intermediate output)
     msg = message or ""
+    print(msg)
+    if log_file:
+        log_message(log_file, msg)
+
+# Consolidated process logger - single line per process
+def process_logger_consolidated(
+    process_num=None,
+    message=None,
+    log_file=None,
+    start_time=None
+):
+    """
+    Logs a consolidated process message with start time, end time, and duration.
+    
+    Args:
+        process_num (str|int): Process number (e.g., 1, 4.2.2, 5.1.1).
+        message (str): Process description message.
+        log_file (str): Full path to log file.
+        start_time (datetime): When the process started.
+    """
+    end_time = datetime.now()
+    start_timestamp = start_time.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    end_timestamp = end_time.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    
+    elapsed = (end_time - start_time).total_seconds()
+    elapsed_str = format_time(elapsed)
+    
+    msg = f"Process-{process_num}: {message or ''} | Started: {start_timestamp} | Ended: {end_timestamp} | Duration: {elapsed_str}"
     print(msg)
     if log_file:
         log_message(log_file, msg)
@@ -809,32 +912,8 @@ def create_ref_point_ra(topodir, outmean):
 # Process completion status check #
 ###################################
 
-def check_align_completion(subswathdir):    
-    pfraw = os.path.join(subswathdir, "raw")
-    pmerge =os.path.join(os.path.dirname(subswathdir), "merge")
-    if not os.path.exists(pfraw):
-        # print(f"❌ Missing directory for {subswathdir}")
-        return False
-    if os.path.exists(pmerge) and os.path.exists(os.path.join(pmerge, "trans.dat")):
-        print(f"✅ {subswathdir} seems to be already aligned because the subswaths seem to be merged.")
-        return True
-    else:
-        # List all files ending with .SLC in the ddata directory
-        slc_files = [f for f in os.listdir(pfraw) if f.endswith('.SLC')]
-        tif_files = [f for f in os.listdir(pfraw) if f.endswith('.tiff')]
-        if not slc_files and not tif_files:
-            # print(f"❌ No SLC files or TIFF files found in {subswathdir}")
-            return False
-        else:
-            if len(slc_files) != len(tif_files):
-                # print(f"❌ File count mismatch: {len(slc_files)} SLC files vs {len(tif_files)} TIFF files")
-                # print(f"❌ Alignment not completed successfully for {subswathdir}")
-                return False
-            else:
-                print(f"✅ Alignment completed successfully for {subswathdir}")
-                return True    
-        
 def check_ifgs_completion(subswathdir, verbose=True):
+    """Check if all interferograms are completed by verifying corr.grd files exist."""
     """Check if all interferograms are completed by verifying corr.grd files exist."""
     intf = os.path.join(subswathdir, "intf.in")
     ifg_dir = os.path.join(subswathdir, "intf_all")
@@ -1424,3 +1503,370 @@ def analyze_flight_directions(safe_dirs, zip_files):
         'direction': direction,
         'details': details
     }
+
+#######################################################################################################
+####################### File Pattern Detection and Management Utilities ############################
+#######################################################################################################
+
+def parse_data_in_line(line):
+    """
+    Parse a single line from data.in file to extract metadata.
+    
+    Sample line format:
+    s1a-iw2-slc-vv-20230407t151038-20230407t151106-047992-05c49e-005:S1A_OPER_AUX_POEORB_OPOD_20230427T080755_V20230406T225942_20230408T005942.EOF
+    
+    Args:
+        line (str): Line from data.in file
+        
+    Returns:
+        dict: Extracted metadata with keys:
+            - 'tiff_name': name before colon
+            - 'eof_name': name after colon  
+            - 'date': date in yyyymmdd format (20230407)
+            - 'subswath': subswath number from iw2 (2)
+            - 'satellite': s1a -> S1
+            - 'time_start': start time (151038)
+            - 'time_end': end time (151106)
+    """
+    try:
+        if ':' not in line:
+            return None
+            
+        tiff_part, eof_part = line.strip().split(':', 1)
+        
+        # Parse tiff filename parts
+        # Format: s1a-iw2-slc-vv-20230407t151038-20230407t151106-047992-05c49e-005
+        parts = tiff_part.split('-')
+        
+        if len(parts) < 8:
+            return None
+            
+        satellite = parts[0].upper()  # s1a -> S1A
+        iw_part = parts[1]           # iw2
+        date_time_start = parts[4]   # 20230407t151038
+        date_time_end = parts[5]     # 20230407t151106
+        
+        # Extract subswath number from iw2
+        subswath_num = iw_part.replace('iw', '') if 'iw' in iw_part else None
+        
+        # Extract date (yyyymmdd) and time from datetime strings
+        date = date_time_start[:8] if len(date_time_start) >= 8 else None
+        time_start = date_time_start[9:] if len(date_time_start) > 9 else None
+        time_end = date_time_end[9:] if len(date_time_end) > 9 else None
+        
+        return {
+            'tiff_name': tiff_part.strip(),
+            'eof_name': eof_part.strip(),
+            'date': date,
+            'subswath': subswath_num,
+            'satellite': satellite.replace('S1A', 'S1').replace('S1B', 'S1'),
+            'time_start': time_start,
+            'time_end': time_end,
+            'raw_line': line.strip()
+        }
+        
+    except Exception as e:
+        print(f"Warning: Could not parse data.in line '{line.strip()}': {e}")
+        return None
+
+def generate_expected_filenames(data_in_entry, file_types=['LED', 'PRM', 'SLC']):
+    """
+    Generate expected filename patterns based on data.in entry.
+    
+    Args:
+        data_in_entry (dict): Parsed data.in entry from parse_data_in_line()
+        file_types (list): List of file extensions to generate patterns for
+        
+    Returns:
+        dict: Dictionary with file_type -> expected_filename mapping
+    """
+    if not data_in_entry or not all(k in data_in_entry for k in ['satellite', 'date', 'subswath']):
+        return {}
+        
+    satellite = data_in_entry['satellite']
+    date = data_in_entry['date'] 
+    subswath = data_in_entry['subswath']
+    time_start = data_in_entry.get('time_start')
+    
+    # Base filename patterns
+    base_all = f"{satellite}_{date}_ALL_F{subswath}"
+    base_time = f"{satellite}_{date}_{time_start}_F{subswath}" if time_start else None
+    
+    expected_files = {}
+    
+    for ext in file_types:
+        # Required files (MUST exist)
+        expected_files[f"{ext}_required"] = f"{base_all}.{ext}"
+        
+        # Optional time-specific files (MAY exist)
+        if base_time and ext == 'SLC':
+            expected_files[f"{ext}_optional_time"] = f"{base_time}.{ext}"
+            # Additional optional files for SLC
+            for optional_ext in ['PRM0', 'BB', '_a.grd', '_r.grd']:
+                expected_files[f"{ext}_optional_{optional_ext.replace('_', '').replace('.', '')}"] = f"{base_time}.{optional_ext}"
+                if optional_ext in ['PRM0', 'BB']:  # These might also have ALL variant
+                    expected_files[f"{ext}_optional_ALL_{optional_ext.replace('.', '')}"] = f"{base_all}.{optional_ext}"
+                    
+    return expected_files
+
+def check_alignment_completion_status(praw_dir, data_in_path=None, apply_network_filtering=True):
+    """
+    Check alignment completion status with detailed file analysis and optional network filtering.
+    
+    Args:
+        praw_dir (str): Path to raw directory
+        data_in_path (str): Optional path to data.in file (defaults to praw_dir/data.in)
+        apply_network_filtering (bool): Whether to filter based on network connectivity from intf.in
+        
+    Returns:
+        dict: Status information with keys:
+            - 'status': 'complete', 'partial', 'none', 'error'
+            - 'total_images': total number of images (network-filtered if enabled)
+            - 'aligned_images': number of images with required SLC files (network-filtered if enabled)
+            - 'missing_images': list of images missing required files (network-filtered if enabled)
+            - 'details': per-image status details
+    """
+    try:
+        if not data_in_path:
+            data_in_path = os.path.join(praw_dir, "data.in")
+            
+        if not os.path.exists(data_in_path):
+            return {'status': 'error', 'message': 'data.in file not found'}
+            
+        if not os.path.exists(praw_dir):
+            return {'status': 'error', 'message': 'Raw directory not found'}
+            
+        # Read and parse data.in file
+        with open(data_in_path, 'r') as f:
+            lines = [line.strip() for line in f if line.strip()]
+            
+        if not lines:
+            return {'status': 'error', 'message': 'Empty data.in file'}
+            
+        # Get list of existing files in directory
+        existing_files = set(os.listdir(praw_dir))
+        
+        total_images = len(lines)
+        aligned_images = 0
+        missing_images = []
+        details = []
+        
+        for line in lines:
+            entry = parse_data_in_line(line)
+            if not entry:
+                details.append({'line': line, 'status': 'parse_error'})
+                continue
+                
+            # Check for required SLC file
+            expected_files = generate_expected_filenames(entry, ['SLC'])
+            required_slc = expected_files.get('SLC_required')
+            
+            if required_slc and required_slc in existing_files:
+                aligned_images += 1
+                details.append({
+                    'image_date': entry['date'],
+                    'required_file': required_slc,
+                    'status': 'aligned',
+                    'entry': entry
+                })
+            else:
+                missing_images.append(entry['date'])
+                details.append({
+                    'image_date': entry['date'],
+                    'required_file': required_slc,
+                    'status': 'missing',
+                    'entry': entry
+                })
+        
+        # Apply network filtering if requested
+        if apply_network_filtering:
+            # Look for intf.in file in parent directory
+            parent_dir = os.path.dirname(praw_dir)
+            intf_in_path = os.path.join(parent_dir, "intf.in")
+            
+            if os.path.exists(intf_in_path):
+                # Extract connected image dates from intf.in
+                connected_images = set()
+                try:
+                    with open(intf_in_path, 'r') as f:
+                        intf_lines = f.readlines()
+                    
+                    import re
+                    for intf_line in intf_lines:
+                        if ':' in intf_line:
+                            parts = intf_line.strip().split(':')
+                            if len(parts) >= 2:
+                                for part in parts:
+                                    date_match = re.search(r'\d{8}', part)
+                                    if date_match:
+                                        connected_images.add(date_match.group())
+                    
+                    if connected_images:
+                        # Filter results to only include connected images
+                        connected_details = []
+                        connected_aligned = 0
+                        connected_missing = []
+                        
+                        for detail in details:
+                            if detail.get('image_date') in connected_images:
+                                connected_details.append(detail)
+                                if detail.get('status') == 'aligned':
+                                    connected_aligned += 1
+                                elif detail.get('status') == 'missing':
+                                    connected_missing.append(detail.get('image_date'))
+                        
+                        # Update counts with network-filtered values
+                        details = connected_details
+                        total_images = len(connected_details)
+                        aligned_images = connected_aligned
+                        missing_images = connected_missing
+                        
+                except Exception as e:
+                    print(f"Warning: Could not apply network filtering: {e}")
+                    # Fall back to original results without filtering
+        
+        # Determine overall status
+        if aligned_images == 0:
+            status = 'none'
+        elif aligned_images == total_images:
+            status = 'complete' 
+        else:
+            status = 'partial'
+            
+        return {
+            'status': status,
+            'total_images': total_images,
+            'aligned_images': aligned_images,
+            'missing_images': missing_images,
+            'details': details
+        }
+        
+    except Exception as e:
+        return {'status': 'error', 'message': f'Analysis failed: {e}'}
+
+def validate_data_in_vs_files(praw_dir, data_in_path=None):
+    """
+    Validate that data.in entries match available TIFF and EOF files.
+    
+    Args:
+        praw_dir (str): Path to raw directory
+        data_in_path (str): Optional path to data.in file
+        
+    Returns:
+        dict: Validation results with keys:
+            - 'valid': bool indicating if counts match
+            - 'data_in_count': number of lines in data.in
+            - 'tiff_count': number of .tiff files found  
+            - 'eof_count': number of .EOF files found
+            - 'missing_tiff': list of TIFF files mentioned in data.in but not found
+            - 'missing_eof': list of EOF files mentioned in data.in but not found
+            - 'extra_tiff': list of TIFF files found but not in data.in
+            - 'extra_eof': list of EOF files found but not in data.in
+    """
+    try:
+        if not data_in_path:
+            data_in_path = os.path.join(praw_dir, "data.in")
+            
+        if not os.path.exists(data_in_path):
+            return {'valid': False, 'error': 'data.in file not found'}
+            
+        if not os.path.exists(praw_dir):
+            return {'valid': False, 'error': 'Raw directory not found'}
+            
+        # Read data.in file
+        with open(data_in_path, 'r') as f:
+            lines = [line.strip() for line in f if line.strip()]
+            
+        data_in_count = len(lines)
+        
+        # Get actual files in directory
+        all_files = os.listdir(praw_dir)
+        tiff_files = {f for f in all_files if f.endswith('.tiff')}
+        eof_files = {f for f in all_files if f.endswith('.EOF')}
+        
+        # Parse data.in entries
+        expected_tiff = set()
+        expected_eof = set()
+        
+        for line in lines:
+            entry = parse_data_in_line(line)
+            if entry:
+                expected_tiff.add(entry['tiff_name'] + '.tiff')
+                expected_eof.add(entry['eof_name'])
+                
+        # Find missing and extra files
+        missing_tiff = expected_tiff - tiff_files
+        missing_eof = expected_eof - eof_files  
+        extra_tiff = tiff_files - expected_tiff
+        extra_eof = eof_files - expected_eof
+        
+        return {
+            'valid': len(missing_tiff) == 0 and len(missing_eof) == 0 and 
+                    len(tiff_files) == data_in_count and len(eof_files) == data_in_count,
+            'data_in_count': data_in_count,
+            'tiff_count': len(tiff_files),
+            'eof_count': len(eof_files),
+            'missing_tiff': list(missing_tiff),
+            'missing_eof': list(missing_eof),
+            'extra_tiff': list(extra_tiff), 
+            'extra_eof': list(extra_eof)
+        }
+        
+    except Exception as e:
+        return {'valid': False, 'error': f'Validation failed: {e}'}
+
+def create_temp_data_in(praw_dir, master_date, unaligned_images, output_path=None):
+    """
+    Create temporary data.in file containing master and unaligned images only.
+    
+    Args:
+        praw_dir (str): Path to raw directory
+        master_date (str): Date of master image (yyyymmdd format)
+        unaligned_images (list): List of image dates that need alignment
+        output_path (str): Optional path for temporary data.in file
+        
+    Returns:
+        str: Path to created temporary data.in file
+    """
+    try:
+        original_data_in = os.path.join(praw_dir, "data.in")
+        
+        if not output_path:
+            output_path = os.path.join(praw_dir, "data_temp.in")
+            
+        if not os.path.exists(original_data_in):
+            raise FileNotFoundError("Original data.in file not found")
+            
+        # Read original data.in
+        with open(original_data_in, 'r') as f:
+            lines = f.readlines()
+            
+        # Find master line and unaligned lines
+        selected_lines = []
+        master_line = None
+        
+        for line in lines:
+            if not line.strip():
+                continue
+                
+            entry = parse_data_in_line(line)
+            if entry and entry['date'] == master_date:
+                master_line = line
+            elif entry and entry['date'] in unaligned_images:
+                selected_lines.append(line)
+                
+        if not master_line:
+            raise ValueError(f"Master image {master_date} not found in data.in")
+            
+        # Write temporary data.in with master first
+        with open(output_path, 'w') as f:
+            f.write(master_line)
+            for line in selected_lines:
+                f.write(line)
+                
+        print(f"Created temporary data.in with master + {len(selected_lines)} unaligned images: {output_path}")
+        return output_path
+        
+    except Exception as e:
+        print(f"Error creating temporary data.in: {e}")
+        return None

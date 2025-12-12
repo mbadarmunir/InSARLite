@@ -3,7 +3,7 @@ from ..gmtsar_gui.alignment import align_sec_imgs
 from ..gmtsar_gui.ifgs_generation import gen_ifgs
 from ..gmtsar_gui.mergeIFGs import merge_thread
 from ..gmtsar_gui.mean_corr import create_mean_grd
-from ..utils.utils import check_align_completion, check_ifgs_completion, check_merge_completion, check_first_ifg_completion
+from ..utils.utils import check_alignment_completion_status, check_ifgs_completion, check_merge_completion, check_first_ifg_completion, process_logger
 import threading
 from tkinter import messagebox
 import os
@@ -245,6 +245,21 @@ class GenIfg:
     def _process_sequence_with_progress(self):
         """Execute the processing sequence with real-time progress monitoring."""
         try:
+            # Log start of entire workflow (Process-2)
+            ui_params = {
+                'master_image': self.mst,
+                'alignment_mode': self.align_mode,
+                'esd_mode': self.esd_mode,
+                'dem_file': self.dem_path,
+                'filter_wavelength': self.filter_wl_var.get(),
+                'range_decimation': self.range_dec_var.get(),
+                'azimuth_decimation': self.az_dec_var.get(),
+                'cores': self.cores_var.get()
+            }
+            process_logger(process_num=2, log_file=self.log_file_path, 
+                         message="Starting image alignment and interferogram generation...", 
+                         mode="start", ui_params=ui_params)
+            
             # Check current status first
             self._check_initial_status()
             
@@ -285,10 +300,19 @@ class GenIfg:
             # Stop monitoring
             self._stop_comprehensive_monitoring()
             
+            # Log end of entire workflow (Process-2)
+            process_logger(process_num=2, log_file=self.log_file_path, 
+                         message="Image alignment and interferogram generation completed.", 
+                         mode="end")
+            
             # Complete
             self._handle_completion()
             
         except Exception as e:
+            # Log error and close Process-2
+            process_logger(process_num=2, log_file=self.log_file_path, 
+                         message=f"Image alignment and interferogram generation failed: {str(e)}", 
+                         mode="end")
             self._handle_error(f"Processing failed: {str(e)}")
 
     def _execute_stage_1_alignment(self):
@@ -298,10 +322,16 @@ class GenIfg:
         # Update stage progress with subprocess info
         self._update_stage_progress("alignment", "In Progress", "2.1")
         
-        # Check if all subswaths are already aligned
+        # Check if all subswaths are already aligned using network-aware status
         all_aligned = True
         for subswath_name, key, path in self.active_subswaths:
-            if not check_align_completion(path):
+            raw_folder = os.path.join(path, "raw")
+            if os.path.exists(raw_folder):
+                status_info = check_alignment_completion_status(raw_folder)
+                if status_info['status'] != 'complete':
+                    all_aligned = False
+                    break
+            else:
                 all_aligned = False
                 break
         
@@ -328,12 +358,22 @@ class GenIfg:
         while wait_time < max_wait:
             all_complete = True
             for subswath_name, key, path in self.active_subswaths:
-                if not check_align_completion(path):
+                # Use network-aware alignment checking
+                raw_folder = os.path.join(path, "raw")
+                if os.path.exists(raw_folder):
+                    status_info = check_alignment_completion_status(raw_folder)
+                    if status_info['status'] != 'complete':
+                        all_complete = False
+                        break
+                else:
                     all_complete = False
                     break
             
             if all_complete:
-                print(f"All subswaths alignment completed after {wait_time} seconds")
+                if wait_time > 0:
+                    print(f"All subswaths alignment completed after {wait_time} seconds")
+                else:
+                    print("All subswaths alignment already completed")
                 return True
                 
             time.sleep(check_interval)
@@ -389,7 +429,7 @@ class GenIfg:
                     while retry_count <= max_retries and not success:
                         try:
                             # Check first interferogram completion using topo_ra.grd
-                            first_ifg_complete = check_first_ifg_completion(path, verbose=True)
+                            first_ifg_complete = check_first_ifg_completion(path, verbose=False)
                             print(f"Attempt {retry_count + 1}: First IFG status for {subswath_name}: {'Complete' if first_ifg_complete else 'Incomplete'}")
                             
                             # Get existing interferograms to skip (refresh each retry)
@@ -559,21 +599,28 @@ class GenIfg:
             return False
 
     def _check_initial_status(self):
-        """Check what's already completed before starting."""
+        """Check what's already completed before starting using network-aware status functions."""
         for subswath_name, key, path in self.active_subswaths:
-            # Check alignment status
-            if check_align_completion(path):
-                self._update_subswath_status(key, "Completed", "Alignment already done")
-                self.subswath_status[key]['alignment_complete'] = True
+            # Check alignment status using network-aware function
+            raw_folder = os.path.join(path, "raw")
+            if os.path.exists(raw_folder):
+                status_info = check_alignment_completion_status(raw_folder)
+                
+                if status_info['status'] == 'complete':
+                    aligned = status_info['aligned_images'] 
+                    total = status_info['total_images']
+                    self._update_subswath_status(key, "Completed", f"Alignment already done: {aligned}/{total} images")
+                    self.subswath_status[key]['alignment_complete'] = True
+                elif status_info['status'] in ['partial', 'none']:
+                    aligned = status_info['aligned_images'] 
+                    total = status_info['total_images']
+                    self._update_subswath_status(key, "Pending", f"Alignment needed: {aligned}/{total} images complete")
+                else:
+                    self._update_subswath_status(key, "Pending", "Alignment needed")
             else:
-                self._update_subswath_status(key, "Pending", "Alignment needed")
+                self._update_subswath_status(key, "Pending", "Raw folder missing")
             
-            # Check first interferogram status  
-            if check_first_ifg_completion(path, verbose=True):
-                self.subswath_status[key]['first_ifg_complete'] = True
-                print(f"First IFG already complete for {subswath_name}")
-            
-            # Check interferogram status
+            # Check interferogram status (first IFG check will happen during generation)
             if check_ifgs_completion(path):
                 self._update_subswath_status(key, "Completed", "Interferograms already done")
                 self.subswath_status[key]['ifg_complete'] = True
@@ -594,36 +641,41 @@ class GenIfg:
                         if hasattr(self, '_cancel_requested') and self._cancel_requested:
                             break
                         
-                        # Monitor alignment progress with subprocess tracking
+                        # Monitor alignment progress with subprocess tracking using network-aware status checking
                         if not self.subswath_status[key]['alignment_complete']:
                             raw_folder = os.path.join(path, "raw")
                             if os.path.exists(raw_folder):
-                                tiff_files = glob.glob(os.path.join(raw_folder, "*.tiff"))
-                                slc_files = glob.glob(os.path.join(raw_folder, "*.SLC"))
+                                # Use the enhanced alignment status function that accounts for network connectivity
+                                status_info = check_alignment_completion_status(raw_folder)
                                 
-                                if len(tiff_files) > 0:
-                                    progress = (len(slc_files) / len(tiff_files)) * 100
+                                if status_info['status'] != 'error':
+                                    total_images = status_info['total_images']
+                                    aligned_images = status_info['aligned_images']
                                     
-                                    # Only update if progress changed
-                                    if key not in self._last_alignment_progress or self._last_alignment_progress[key] != progress:
-                                        self._last_alignment_progress[key] = progress
+                                    if total_images > 0:
+                                        progress = (aligned_images / total_images) * 100
                                         
-                                        # Determine subprocess info for alignment
-                                        subswath_num = key[-1]  # F1->1, F2->2, F3->3
-                                        subprocess_stage = f"2.1.{subswath_num}"
-                                        detail = f"Alignment: {len(slc_files)}/{len(tiff_files)} images ({progress:.1f}%)"
-                                        
-                                        # Update stage progress with subprocess info
-                                        if not hasattr(self, '_current_align_subprocess') or self._current_align_subprocess != subprocess_stage:
-                                            self._current_align_subprocess = subprocess_stage
-                                            self.progress_window.after(0, lambda ss=subprocess_stage: self._update_stage_progress("alignment", "In Progress", ss))
-                                        
-                                        if len(slc_files) > 0 and progress < 100:
-                                            self.progress_window.after(0, lambda k=key, d=detail: self._update_subswath_status(k, "In Progress", d))
-                                        
-                                        if len(slc_files) >= len(tiff_files):
-                                            self.subswath_status[key]['alignment_complete'] = True
-                                            self.progress_window.after(0, lambda k=key: self._update_subswath_status(k, "Completed", "Alignment completed"))
+                                        # Only update if progress changed
+                                        if key not in self._last_alignment_progress or self._last_alignment_progress[key] != progress:
+                                            self._last_alignment_progress[key] = progress
+                                            
+                                            # Determine subprocess info for alignment
+                                            subswath_num = key[-1]  # F1->1, F2->2, F3->3
+                                            subprocess_stage = f"2.1.{subswath_num}"
+                                            detail = f"Alignment: {aligned_images}/{total_images} images ({progress:.1f}%)"
+                                            
+                                            # Update stage progress with subprocess info
+                                            if not hasattr(self, '_current_align_subprocess') or self._current_align_subprocess != subprocess_stage:
+                                                self._current_align_subprocess = subprocess_stage
+                                                self.progress_window.after(0, lambda ss=subprocess_stage: self._update_stage_progress("alignment", "In Progress", ss))
+                                            
+                                            if aligned_images > 0 and progress < 100:
+                                                self.progress_window.after(0, lambda k=key, d=detail: self._update_subswath_status(k, "In Progress", d))
+                                            
+                                            # Use network-aware completion check
+                                            if status_info['status'] == 'complete':
+                                                self.subswath_status[key]['alignment_complete'] = True
+                                                self.progress_window.after(0, lambda k=key, ai=aligned_images, ti=total_images: self._update_subswath_status(k, "Completed", f"Alignment completed: {ai}/{ti} images (100%)"))
                         
                         # Monitor interferogram progress with detailed subprocess info
                         if self.subswath_status[key]['alignment_complete'] and not self.subswath_status[key]['ifg_complete']:

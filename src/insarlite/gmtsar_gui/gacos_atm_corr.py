@@ -2,7 +2,7 @@ import subprocess
 import os
 from datetime import datetime, timedelta
 from multiprocessing import Pool
-from ..utils.utils import create_symlink
+from ..utils.utils import create_symlink, process_logger, process_logger_consolidated
 
 
 def convert_date(code):
@@ -104,7 +104,11 @@ def operation(args):
         print(f"Error in operation for {master_ztd} and {slave_ztd}: {e}")
 
 def gacos_worker(args):
-    GACOS_dir, topo_dir, incidence, intf_dir, dir = args
+    GACOS_dir, topo_dir, incidence, intf_dir, dir, ifg_index, log_file = args
+    process_num = f"5.3.{ifg_index}"  # 5.3.1, 5.3.2, etc.
+    
+    start_time = datetime.now()
+    
     try:
         os.chdir(os.path.join(intf_dir, dir))
         fst_date = convert_date(str(int(dir.split('_')[0]) + 1))
@@ -133,16 +137,38 @@ def gacos_worker(args):
             else:
                 print('GACOS Correction already done for the current dir')
             os.remove("trans.dat")
+            if log_file:
+                process_logger_consolidated(
+                    process_num=process_num, 
+                    message=f"GACOS correction for interferogram {dir} completed successfully", 
+                    log_file=log_file,
+                    start_time=start_time
+                )
         else:
             print("GACOS files do not exist / Wrong directory")
+            if log_file:
+                process_logger_consolidated(
+                    process_num=process_num, 
+                    message=f"GACOS correction for {dir} skipped - missing GACOS files", 
+                    log_file=log_file,
+                    start_time=start_time
+                )
     except Exception as e:
         print(f"Error processing interferogram {dir}: {e}")
+        if log_file:
+            process_logger_consolidated(
+                process_num=process_num, 
+                message=f"GACOS correction for {dir} failed: {str(e)}", 
+                log_file=log_file,
+                start_time=start_time
+            )
 
-def gacos(GACOS_dir, topo_dir, incidence, intf_dir, num_cores):
+def gacos(GACOS_dir, topo_dir, incidence, intf_dir, num_cores, log_file=None):
     
+    ifg_dirs = [dir for dir in os.listdir(intf_dir) if os.path.isdir(os.path.join(intf_dir, dir))]
     args_list = [
-        (GACOS_dir, topo_dir, incidence, intf_dir, dir)
-        for dir in os.listdir(intf_dir) if os.path.isdir(os.path.join(intf_dir, dir))
+        (GACOS_dir, topo_dir, incidence, intf_dir, dir, i+1, log_file)
+        for i, dir in enumerate(ifg_dirs)
     ]
 
     print(f"Starting GACOS correction with {num_cores} cores")

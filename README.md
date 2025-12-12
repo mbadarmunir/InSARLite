@@ -2,7 +2,7 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.2.1-blue.svg)](https://github.com/mbadarmunir/InSARLite/releases)
+[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](https://github.com/mbadarmunir/InSARLite/releases)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17481377.svg)](https://doi.org/10.5281/zenodo.17481377)
 [![Documentation](https://img.shields.io/badge/docs-available-brightgreen.svg)](https://insarlite.readthedocs.io/)
 
@@ -137,7 +137,7 @@ If you use InSARLite in your research, please cite:
 
 **Zenodo DOI:**
 ```
-Munir, Muhammad Badar. (2025). InSARLite: A GUI Application for GMTSAR-based InSAR Processing (v1.2.1). 
+Munir, Muhammad Badar. (2025). InSARLite: A GUI Application for GMTSAR-based InSAR Processing (v1.3.0). 
 Zenodo. https://doi.org/10.5281/zenodo.17481377
 ```
 
@@ -147,7 +147,7 @@ Zenodo. https://doi.org/10.5281/zenodo.17481377
   title={InSARLite: A GUI Application for GMTSAR-based InSAR Processing},
   author={Muhammad Badar Munir},
   year={2025},
-  version={1.2.1},
+  version={1.3.0},
   url={https://github.com/mbadarmunir/InSARLite},
   doi={10.5281/zenodo.17481377},
   license={MIT}

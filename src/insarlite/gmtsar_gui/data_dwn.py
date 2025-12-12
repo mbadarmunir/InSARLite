@@ -129,10 +129,12 @@ def download_sentinel1_acquisitions(files_info, outputdir, total_expected_size,
         progress_callback (callable): Callback function for progress updates.
         pause_event (threading.Event): Event to pause downloads.
     """
-    # Ensure EarthData authentication
+    # Ensure EarthData authentication and get cached session
     if not ensure_earthdata_auth():
         raise Exception("Could not authenticate with EarthData for downloads")
     
+    # Get the authenticated session once and reuse it for all downloads
+    shared_session = get_earthdata_session()
     print("✓ Using unified EarthData authentication for downloads")
     
     os.makedirs(outputdir, exist_ok=True)
@@ -143,11 +145,12 @@ def download_sentinel1_acquisitions(files_info, outputdir, total_expected_size,
     paused_time = [0]  # Track total paused time (list for closure)
     last_pause_start = [None]  # Track when current pause started (list for closure)
     download_sizes = [0] * total
+    session_downloaded = [0] * total  # Track only bytes downloaded THIS session
     lock = threading.Lock()
     speed_window = []
     stats_running = True
 
-    # Initialize download_sizes with any existing files
+    # Initialize download_sizes with any existing files, but don't count them for speed
     # Note: This is a rough estimate - actual verification happens in download_file()
     for idx, (url, expected_size) in enumerate(files_info):
         filename = os.path.basename(url).split('?')[0]
@@ -155,16 +158,17 @@ def download_sentinel1_acquisitions(files_info, outputdir, total_expected_size,
         if os.path.isfile(outpath):
             try:
                 download_sizes[idx] = os.path.getsize(outpath)
+                # session_downloaded[idx] remains 0 for existing files
             except OSError:
                 download_sizes[idx] = 0
 
     def download_file(url, idx, expected_size):
-        """Download a single file using authenticated session and update its progress."""
+        """Download a single file using shared authenticated session and update its progress."""
         filename = os.path.basename(url).split('?')[0]
         outpath = os.path.join(outputdir, filename)
         
-        # Get authenticated session
-        session = get_earthdata_session()
+        # Use the shared session instead of creating a new one each time
+        session = shared_session
         
         # Check if file exists and get its current size
         existing_size = 0
@@ -175,12 +179,21 @@ def download_sentinel1_acquisitions(files_info, outputdir, total_expected_size,
                 existing_size = 0
         
         # Check if file is complete
-        if existing_size > 0 and expected_size and existing_size == expected_size:
-            # File is complete, add to progress and skip
-            with lock:
-                download_sizes[idx - 1] = existing_size
-            print(f" > File {outpath} already complete ({existing_size} bytes), skipping.")
-            return
+        if existing_size > 0:
+            if expected_size and existing_size == expected_size:
+                # File is complete, add to progress but NOT to session download count
+                with lock:
+                    download_sizes[idx - 1] = existing_size
+                    # session_downloaded[idx - 1] remains 0 - no new download
+                print(f" > File {filename} already complete ({existing_size} bytes), skipping.")
+                return
+            elif not expected_size and existing_size > 1024*1024:  # File > 1MB and no expected size
+                # Assume large files are likely complete if we don't know the expected size
+                # This is a fallback for cases where expected_size is None/0
+                print(f" > File {filename} exists ({existing_size} bytes), assuming complete (no expected size), skipping.")
+                with lock:
+                    download_sizes[idx - 1] = existing_size
+                return
         
         # Handle partial file - try to resume if supported
         resume_pos = 0
@@ -215,10 +228,30 @@ def download_sentinel1_acquisitions(files_info, outputdir, total_expected_size,
                 except OSError:
                     pass
                 existing_size = 0
+            elif not expected_size and existing_size < 1024*1024:  # Small partial file, no expected size
+                # For files smaller than 1MB with unknown expected size, try to resume
+                print(f" > Attempting to resume {filename} from {existing_size} bytes (unknown expected size)...")
+                try:
+                    test_response = session.get(url, headers={'Range': 'bytes=0-1'}, timeout=10)
+                    if test_response.status_code == 206:
+                        resume_pos = existing_size
+                    else:
+                        print(f" > Server doesn't support resume for {filename}, restarting...")
+                        os.remove(outpath)
+                        existing_size = 0
+                    test_response.close()
+                except Exception:
+                    print(f" > Resume test failed for {filename}, restarting...")
+                    try:
+                        os.remove(outpath)
+                    except OSError:
+                        pass
+                    existing_size = 0
         
         # Initialize progress with existing bytes
         with lock:
             download_sizes[idx - 1] = existing_size
+            session_downloaded[idx - 1] = 0  # No session download yet
         
         try:
             # Download using authenticated session
@@ -245,6 +278,7 @@ def download_sentinel1_acquisitions(files_info, outputdir, total_expected_size,
             mode = "ab" if resume_pos > 0 else "wb"
             with open(outpath, mode) as f:
                 bytes_downloaded = existing_size  # Start with existing bytes
+                session_start_bytes = existing_size  # Track where this session started
                 for chunk in response.iter_content(chunk_size=1024*1024):
                     # Respect pause
                     if pause_event and pause_event.is_set():
@@ -258,6 +292,8 @@ def download_sentinel1_acquisitions(files_info, outputdir, total_expected_size,
                         # Update global progress tracking
                         with lock:
                             download_sizes[idx - 1] = bytes_downloaded
+                            # Track only bytes downloaded in this session (excluding pre-existing)
+                            session_downloaded[idx - 1] = bytes_downloaded - session_start_bytes
 
             # Verify final file size if we know what to expect
             if expected_size and bytes_downloaded != expected_size:
@@ -266,6 +302,38 @@ def download_sentinel1_acquisitions(files_info, outputdir, total_expected_size,
                 print(f" > Downloaded {outpath} ({bytes_downloaded} bytes)")
                 
         except Exception as e:
+            # Check if this might be an authentication error
+            if "401" in str(e) or "403" in str(e) or "Unauthorized" in str(e):
+                print(f"🔄 Authentication error for {filename}, refreshing session...")
+                try:
+                    # Get a fresh session and retry once
+                    session = get_earthdata_session()
+                    response = session.get(url, headers=headers, timeout=60, stream=True)
+                    response.raise_for_status()
+                    
+                    mode = "ab" if resume_pos > 0 else "wb"
+                    with open(outpath, mode) as f:
+                        bytes_downloaded = existing_size
+                        session_start_bytes = existing_size
+                        for chunk in response.iter_content(chunk_size=1024*1024):
+                            if pause_event and pause_event.is_set():
+                                time.sleep(0.2)
+                                continue
+                            
+                            if chunk:
+                                f.write(chunk)
+                                bytes_downloaded += len(chunk)
+                                
+                                with lock:
+                                    download_sizes[idx - 1] = bytes_downloaded
+                                    session_downloaded[idx - 1] = bytes_downloaded - session_start_bytes
+                    
+                    print(f" > Downloaded {outpath} ({bytes_downloaded} bytes) [after retry]")
+                    return
+                    
+                except Exception as retry_error:
+                    print(f"🔄 Retry also failed for {filename}: {retry_error}")
+            
             print(f"Error downloading {filename}: {e}")
             # If download failed and we were resuming, try to restart
             if resume_pos > 0 and os.path.isfile(outpath):
@@ -292,30 +360,41 @@ def download_sentinel1_acquisitions(files_info, outputdir, total_expected_size,
             elapsed = current_time - start_time - paused_time[0]
             with lock:
                 total_downloaded = sum(download_sizes)
-                # Update speed window for current speed calculation
+                session_bytes_downloaded = sum(session_downloaded)  # Only bytes downloaded THIS session
+                # Update speed window for current speed calculation using session bytes only
                 now = time.time()
-                speed_window.append((now, total_downloaded))
-                # Keep only last 3 seconds for more responsive current speed
-                speed_window[:] = [(t, b) for t, b in speed_window if now - t <= 3]
+                speed_window.append((now, session_bytes_downloaded))
+                # Keep only last 5 seconds for more stable current speed
+                speed_window[:] = [(t, b) for t, b in speed_window if now - t <= 5]
 
-            # Calculate average speed (using active time only)
-            mean_speed = total_downloaded / elapsed if elapsed > 0 else 0
+            # Calculate average speed using only session downloads (excluding pre-existing files)
+            mean_speed = session_bytes_downloaded / elapsed if elapsed > 0 else 0
             
-            # Calculate current speed from sliding window
+            # Calculate current speed from sliding window with smoothing
             if len(speed_window) >= 2:
                 t0, b0 = speed_window[0]
                 t1, b1 = speed_window[-1]
                 current_speed = (b1 - b0) / (t1 - t0) if (t1 - t0) > 0 else 0
+                
+                # Apply smoothing for more stable display
+                if hasattr(stats_updater, 'last_current_speed'):
+                    current_speed = 0.7 * stats_updater.last_current_speed + 0.3 * current_speed
+                stats_updater.last_current_speed = current_speed
             else:
                 current_speed = mean_speed
+                if not hasattr(stats_updater, 'last_current_speed'):
+                    stats_updater.last_current_speed = current_speed
 
             # Calculate other statistics
             percent_complete = (total_downloaded / total_expected_size * 100) if total_expected_size > 0 else 0
-            eta = (total_expected_size - total_downloaded) / current_speed if current_speed > 0 else float('inf')
+            # Calculate ETA based on remaining bytes that still need to be downloaded
+            remaining_bytes = total_expected_size - total_downloaded
+            eta = remaining_bytes / current_speed if current_speed > 0 and remaining_bytes > 0 else 0
 
             stats = {
                 "elapsed": elapsed,
                 "total_downloaded": total_downloaded,
+                "session_downloaded": session_bytes_downloaded,  # Add this for debugging
                 "total_expected_size": total_expected_size,
                 "mean_speed": mean_speed,
                 "current_speed": current_speed,
@@ -326,7 +405,7 @@ def download_sentinel1_acquisitions(files_info, outputdir, total_expected_size,
             if progress_callback:
                 progress_callback(stats)
             
-            time.sleep(0.5)  # Update twice per second for smooth progress
+            time.sleep(1.0)  # Update once per second for stable progress
 
     # Start statistics updater thread
     stats_thread = threading.Thread(target=stats_updater, daemon=True)
@@ -350,12 +429,14 @@ def download_sentinel1_acquisitions(files_info, outputdir, total_expected_size,
     elapsed = time.time() - start_time
     with lock:
         total_downloaded = sum(download_sizes)
+        session_bytes_downloaded = sum(session_downloaded)
     
     final_stats = {
         "elapsed": elapsed,
         "total_downloaded": total_downloaded,
+        "session_downloaded": session_bytes_downloaded,
         "total_expected_size": total_expected_size,
-        "mean_speed": total_downloaded / elapsed if elapsed > 0 else 0,
+        "mean_speed": session_bytes_downloaded / elapsed if elapsed > 0 else 0,  # Use session bytes for speed
         "current_speed": 0,  # Download complete
         "percent_complete": 100.0,
         "eta_seconds": 0,

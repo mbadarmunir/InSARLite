@@ -1,14 +1,14 @@
 # Quick Start Guide
 
-Get up and running with InSARLite in minutes! This guide will walk you through your first InSAR processing workflow.
+Get up and running with InSARLite quickly! This guide provides essential information to start your first InSAR processing workflow.
 
 ## Prerequisites
 
 - InSARLite installed ([see installation guide](installation.md))
-- EarthData account for Sentinel-1 data downloads
+- NASA EarthData account for Sentinel-1 data downloads
 
 ```{important}
-**Platform Requirements**: InSARLite works best on **Ubuntu Linux**. Windows users should use **WSL2** with Ubuntu. See the [installation guide](installation.md) for platform-specific instructions.
+**Platform Requirements**: InSARLite has been developed and tested exclusively on **Ubuntu 20.04 and 22.04 LTS**. Other operating systems (including WSL, macOS, or other Linux distributions) have not been tested and are not officially supported.
 ```
 
 ```{note}
@@ -30,173 +30,91 @@ InSARLiteApp
 3. Install required system dependencies
 4. Configure environment variables
 
-This process takes 15-30 minutes but only happens once.
+This process takes 15-30 minutes but only happens once. See the [Installation Guide](installation.md) for details.
 ```
 
-The main InSARLite window will appear with several tabs for different processing stages.
+## Learn InSARLite: Turkey Landslide Tutorial
 
-## Your First InSAR Project
+**The best way to learn InSARLite is through our comprehensive tutorial:**
 
-### Step 1: Set Up EarthData Authentication
+### [🏔️ Turkey Landslide Case Study →](tutorials/turkey-case-study.md)
 
-Before downloading Sentinel-1 data, you need to configure your NASA EarthData credentials:
+This complete end-to-end tutorial demonstrates InSARLite's full workflow using real research data from the December 8, 2024 Güngören landslide in northeastern Turkey. The tutorial includes **63 screenshots** covering every step from installation to scientific results.
 
-1. **Create an EarthData Account**: Visit [https://urs.earthdata.nasa.gov/](https://urs.earthdata.nasa.gov/)
-2. **In InSARLite**: The first time you download data, you'll be prompted for credentials
-3. **Enter your username and password** - these will be securely stored for future use
+**What's Covered:**
+- ✅ GMTSAR automatic installation (8 screenshots)
+- ✅ Project configuration with AOI and temporal range (14 screenshots)
+- ✅ Data querying, downloading, and extraction
+- ✅ Baseline network design and master selection (9 screenshots)
+- ✅ Interferogram generation (3 screenshots)
+- ✅ Phase unwrapping with mask and reference point (20 screenshots)
+- ✅ SBAS inversion and time series analysis (6 screenshots)
+- ✅ Interactive visualization and results (2 screenshots)
 
-### Step 2: Define Your Study Area
-
-1. **Navigate to the Data Download tab**
-2. **Set your Area of Interest (AOI)**:
-   - Enter coordinates manually, OR
-   - Use the interactive map to draw your area
-   - Upload a shapefile or KML file
-
-3. **Set Time Period**:
-   - Start date: Choose your beginning date
-   - End date: Choose your end date
-   - *Tip: Start with a short time period (2-3 months) for your first project*
-
-### Step 3: Download Sentinel-1 Data
-
-1. **Configure download parameters**:
-   - **Track/Path**: Specific satellite track (or leave blank for auto-detection)
-   - **Flight Direction**: Ascending or Descending
-   - **Polarization**: VV (recommended) or VH
-
-2. **Click "Query Data"** to search for available scenes
-3. **Review the results** in the data table
-4. **Click "Download Selected"** to start downloading
-   - Data will be saved to your specified project directory
-   - Download progress will be shown
+**Dataset Details:**
+- **Acquisitions**: 60 Sentinel-1 scenes
+- **Processing Time**: ~50 hours
+- **Storage Required**: ~710 GB
+- **Results**: Mean VLOS velocities up to 25 mm/yr, precursory deformation detected
 
 ```{tip}
-Start with a small area and short time period for your first project to minimize download time and processing complexity.
+The Turkey tutorial uses actual research data demonstrating how InSAR can detect precursory deformation signals before catastrophic landslide failures—perfect for understanding InSARLite's scientific capabilities!
 ```
 
-### Step 4: Plan Your Interferometric Network
+## Quick Workflow Overview
 
-1. **Navigate to the Baseline Planning tab**
-2. **Load your downloaded data** - InSARLite will automatically detect Sentinel-1 files
-3. **View the baseline plot**:
-   - X-axis: Temporal baseline (time difference)
-   - Y-axis: Perpendicular baseline (spatial separation)
-   - Each point represents a Sentinel-1 acquisition
+For reference, here are the main processing steps covered in the Turkey tutorial:
 
-4. **Design your interferometric pairs**:
-   - Click and drag to select acquisition pairs
-   - Red lines show selected interferometric pairs
-   - Blue points show individual acquisitions
+1. **Installation**: GMTSAR automatic setup
+2. **Project Configuration**: Define AOI, temporal range, download data
+3. **Baseline Network**: Design interferometric pairs using Base2Net
+4. **Interferogram Generation**: Align and generate IFGs
+5. **Phase Unwrapping**: Create mask, select reference point, unwrap
+6. **SBAS Inversion**: Time series analysis and velocity mapping
+7. **Visualization**: Interactive exploration of results
 
-5. **Select master scene**:
-   - Choose a scene near the center of the temporal-spatial baseline plot
-   - Or use the automatic master selection tool
+## Adapting the Tutorial to Your Study Area
 
-### Step 5: Generate Interferograms
+Once you've completed the Turkey case study, you can adapt the workflow to your own study area by adjusting key parameters:
 
-1. **Navigate to the Processing tab**
-2. **Configure processing parameters**:
-   - **DEM**: Choose DEM source (SRTM 30m or SRTM 90m)
-   - **Processing steps**: Select which steps to run
-   - **Output format**: Choose output formats
+### Spatial Parameters
+- **AOI coordinates**: Draw your own bounding box on the interactive map
+- **Location**: Any area covered by Sentinel-1 (global coverage)
+- **Frame selection**: Automatic based on your AOI
 
-3. **Start processing**:
-   - Click "Start Processing"
-   - Monitor progress in the log window
-   - Processing includes:
-     - Image alignment
-     - Interferogram formation
-     - Coherence calculation
-     - Phase unwrapping (if selected)
+### Temporal Parameters  
+- **Start date**: Beginning of your analysis period
+- **End date**: End of your analysis period
+- **Temporal baseline threshold**: 24-96 days typical (adjust based on application)
 
-### Step 6: Visualize Results
+### Network Parameters
+- **Perpendicular baseline threshold**: 150-300m (depends on coherence requirements)
+- **Master image**: Select based on network centrality or specific date
+- **Network density**: More pairs increase computation but improve temporal coverage
 
-1. **Navigate to the Visualization tab**
-2. **Load your results**:
-   - Browse to your project output directory
-   - Select interferograms to visualize
+### Processing Parameters
+- **Subswath**: IW1, IW2, IW3, or combinations thereof
+- **Correlation threshold**: 0.05-0.15 (lower for challenging areas)
+- **Reference point**: Select stable area in your region (critical for accurate results)
+- **SBAS smoothing**: Adjust based on noise characteristics
 
-3. **Explore your data**:
-   - View wrapped/unwrapped phase
-   - Examine coherence maps
-   - Create displacement time series
-   - Export figures and animations
-
-## Example Workflow: Los Angeles Area
-
-Here's a complete example processing the Los Angeles area:
-
-### Parameters
-- **Area**: 34.0°N to 34.2°N, -118.5°W to -118.2°W
-- **Time Period**: January 2023 - March 2023
-- **Track**: 71 (Descending)
-- **Polarization**: VV
-
-### Expected Results
-- ~10-15 Sentinel-1 acquisitions
-- ~50-100 interferometric pairs
-- Coherence maps showing urban areas vs. vegetated regions
-- Phase maps showing potential deformation signals
-
-## Tips for Success
-
-### Data Selection
-- **Start small**: Begin with a limited area and time period
-- **Check data availability**: Some areas have more frequent coverage
-- **Consider seasonality**: Vegetation changes affect coherence
-
-### Baseline Planning
-- **Temporal baselines**: Keep under 48 days for good coherence
-- **Perpendicular baselines**: Keep under 150m for C-band
-- **Network design**: Create a well-connected network of pairs
-
-### Processing
-- **DEM quality**: Use the highest quality DEM available for your area
-- **Parameter tuning**: Default parameters work well for most cases
-- **Monitor resources**: Processing can be memory and CPU intensive
-
-### Troubleshooting
-- **Download issues**: Check your internet connection and EarthData credentials
-- **Processing errors**: Check the log files for detailed error messages
-- **Memory errors**: Process smaller areas or use data decimation
-
-## Common Workflows
-
-### Earthquake Deformation Study
-1. Focus on time period around earthquake event
-2. Use short temporal baselines (6-12 days)
-3. Create before/after interferograms
-4. Look for fringes indicating surface deformation
-
-### Volcano Monitoring
-1. Regular time series over volcanic area
-2. Mix of short and long temporal baselines
-3. Monitor coherence changes indicating surface changes
-4. Create displacement time series
-
-### Urban Subsidence Monitoring
-1. Long time series over urban areas
-2. Focus on areas with good coherence (buildings, roads)
-3. Use persistent scatterer techniques
-4. Track cumulative displacement over time
-
-## Next Steps
-
-Now that you've completed your first InSAR project:
-
-1. **Explore advanced features**: Read the [User Guide](user-guide/index.md)
-2. **Try different areas**: Process different geographical regions
-3. **Learn about parameters**: Understand the processing parameters in detail
-4. **Join the community**: Participate in discussions and share your results
+```{tip}
+Start with parameters similar to the Turkey case study, then refine based on your specific application, study area characteristics, and coherence conditions.
+```
 
 ## Getting Help
 
 If you encounter issues:
 
-- **Check the logs**: InSARLite provides detailed processing logs
-- **Read the documentation**: This documentation covers most common scenarios
-- **Search existing issues**: [GitHub Issues](https://github.com/mbadarmunir/InSARLite/issues)
-- **Ask for help**: Create a new issue with your specific problem
+- **Check processing logs**: InSARLite provides detailed logs for each processing step
+- **Review the tutorial**: The [Turkey Case Study](tutorials/turkey-case-study.md) includes troubleshooting tips
+- **Search GitHub Issues**: [https://github.com/mbadarmunir/InSARLite/issues](https://github.com/mbadarmunir/InSARLite/issues)
+- **Create new issue**: Provide error messages, screenshots, and system details
+
+## Next Steps
+
+- **Complete the tutorial**: Work through the [Turkey Landslide Case Study](tutorials/turkey-case-study.md)
+- **Explore your data**: Apply InSARLite to your own research area
+- **Understand the architecture**: Read the [Overview](user-guide/overview.md) for technical details
 
 Happy processing! 🛰️📊

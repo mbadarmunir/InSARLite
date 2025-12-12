@@ -84,7 +84,7 @@ def summarize_polarizations_from_files(file_list: List[str]) -> Dict[str, int]:
     Summarize polarizations available in a list of files.
     
     Args:
-        file_list: List of file paths (SAFE dirs or ZIP files)
+        file_list: List of file paths (SAFE dirs, ZIP files, or TIFF files)
         
     Returns:
         Dictionary with polarization counts
@@ -99,8 +99,25 @@ def summarize_polarizations_from_files(file_list: List[str]) -> Dict[str, int]:
     type2_found = False
     pol_dir_groups = {}
     
+    # Pattern to extract polarization from TIFF filenames
+    tiff_pattern = re.compile(
+        r"s1[ab]-iw[123]-slc-(?P<polarization>vv|vh|hh|hv)-",
+        re.IGNORECASE
+    )
+    
     for x in file_list:
         name = os.path.basename(x)
+        
+        # Check if this is a TIFF file and extract polarization directly
+        if name.lower().endswith('.tiff'):
+            match = tiff_pattern.search(name)
+            if match:
+                pol = match.group('polarization').upper()
+                if pol in summary:
+                    summary[pol] += 1
+                continue  # Skip the ZIP/SAFE processing for TIFF files
+        
+        # Original logic for ZIP files and SAFE directories
         if len(name) >= 16:
             pol_code = name[14:16]
             if pol_code in pol_map:
@@ -114,6 +131,11 @@ def summarize_polarizations_from_files(file_list: List[str]) -> Dict[str, int]:
         # Group by pol_dir and count files for each polarization
         for x in file_list:
             name = os.path.basename(x)
+            
+            # Skip TIFF files in this grouping (already handled above)
+            if name.lower().endswith('.tiff'):
+                continue
+                
             if len(name) >= 16:
                 pol_dir = name[:15]
                 pol_code = name[14:16]
@@ -368,6 +390,8 @@ def extract_zip_files_with_progress(
     folder: str, 
     selected_subswaths: List[int], 
     selected_pol: str,
+    start_date: str = None,
+    end_date: str = None,
     progress_callback=None,
     quick_comparison: bool = True
 ) -> Tuple[int, int, List[str], Dict[str, int]]:
@@ -379,6 +403,8 @@ def extract_zip_files_with_progress(
         folder: Destination folder
         selected_subswaths: List of subswath numbers to extract
         selected_pol: Polarization to extract
+        start_date: Start date filter (YYYY-MM-DD format, optional)
+        end_date: End date filter (YYYY-MM-DD format, optional)
         progress_callback: Callback function for progress updates
         quick_comparison: If True, use fast size+timestamp comparison (default: True)
         
@@ -390,6 +416,57 @@ def extract_zip_files_with_progress(
         r"s1[ab]-iw(?P<subswath>[123])-slc-(?P<polarization>vv|vh|hh|hv)-\d{8}t\d{6}-\d{8}t\d{6}-\d{6}-[0-9a-f]{6}-\d{3}\.tiff$",
         re.IGNORECASE
     )
+    
+    # Parse date range if provided
+    start_dt = None
+    end_dt = None
+    if start_date:
+        try:
+            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+        except ValueError:
+            print(f"Warning: Invalid start date format '{start_date}', ignoring date filter")
+    if end_date:
+        try:
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+        except ValueError:
+            print(f"Warning: Invalid end date format '{end_date}', ignoring date filter")
+    
+    # Filter ZIP files by date range if specified
+    if start_dt or end_dt:
+        filtered_zips = []
+        for zip_path in zip_files:
+            basename = os.path.basename(zip_path)
+            # Extract date from Sentinel-1 filename pattern
+            # S1A_IW_SLC__1SDV_20210101T050000_20210101T050030_036123_043C8A_1234.zip
+            if basename.startswith('S1') and '_IW_SLC_' in basename:
+                match = re.search(r'_(\d{8})T\d{6}_(\d{8})T\d{6}_', basename)
+                if match:
+                    zip_start_date = match.group(1)  # YYYYMMDD
+                    try:
+                        zip_dt = datetime.strptime(zip_start_date, '%Y%m%d')
+                        # Check if ZIP date is within range
+                        if start_dt and zip_dt < start_dt:
+                            print(f"Skipping {basename} - date {zip_dt.strftime('%Y-%m-%d')} is before {start_date}")
+                            continue
+                        if end_dt and zip_dt > end_dt:
+                            print(f"Skipping {basename} - date {zip_dt.strftime('%Y-%m-%d')} is after {end_date}")
+                            continue
+                        filtered_zips.append(zip_path)
+                    except ValueError:
+                        # Can't parse date, include the file
+                        filtered_zips.append(zip_path)
+                else:
+                    # No date found, include the file
+                    filtered_zips.append(zip_path)
+            else:
+                # Not a standard Sentinel-1 filename, include the file
+                filtered_zips.append(zip_path)
+        
+        original_count = len(zip_files)
+        zip_files = filtered_zips
+        if start_dt or end_dt:
+            date_range_str = f"{start_date or 'any'} to {end_date or 'any'}"
+            print(f"Date filtering: {len(zip_files)}/{original_count} ZIP files within range {date_range_str}")
     
     # Count total files to extract for progress tracking
     total_files = 0
@@ -478,10 +555,32 @@ def extract_zip_files_with_progress(
                     file_list = zf.namelist()
                     print(f"  Python zipfile can read {zip_basename} ({len(file_list)} files)")
                     
-                    # Extract entire ZIP since we couldn't do detailed analysis before
+                    # Extract with filtering based on subswath and polarization
+                    extracted_file_count = 0
+                    filtered_tiff_count = 0
+                    skipped_existing_count = 0
+                    
                     for member in file_list:
                         if member.endswith('/'):
                             continue
+                        
+                        # Check if this is a TIFF file and filter by subswath/polarization
+                        filename = os.path.basename(member)
+                        if filename.lower().endswith('.tiff'):
+                            match = tiff_pattern.search(filename)
+                            if match:
+                                subswath = int(match.group('subswath'))
+                                polarization = match.group('polarization')
+                                
+                                # Skip if not in selected criteria
+                                if subswath not in selected_subswaths:
+                                    print(f"  Skipping {filename} - subswath IW{subswath} not selected")
+                                    filtered_tiff_count += 1
+                                    continue
+                                if polarization.lower() != selected_pol.lower():
+                                    print(f"  Skipping {filename} - polarization {polarization.upper()} not selected")
+                                    filtered_tiff_count += 1
+                                    continue
                         
                         out_path = os.path.join(folder, member)
                         os.makedirs(os.path.dirname(out_path), exist_ok=True)
@@ -490,15 +589,19 @@ def extract_zip_files_with_progress(
                         if os.path.exists(out_path):
                             if are_files_identical(zf, member, out_path, quick_comparison):
                                 skipped_count += 1
+                                skipped_existing_count += 1
                                 continue
                         
                         # Extract the file
                         with zf.open(member) as src, open(out_path, 'wb') as dst:
                             shutil.copyfileobj(src, dst)
-                        # Individual file extracted - don't update progress per file
+                        extracted_file_count += 1
                     
                     extraction_successful = True
-                    print(f"✓ Python zipfile extraction successful for {zip_basename}")
+                    if filtered_tiff_count > 0:
+                        print(f"✓ Python zipfile extraction successful for {zip_basename} ({extracted_file_count} extracted, {skipped_existing_count} already exist, {filtered_tiff_count} filtered by parameters)")
+                    else:
+                        print(f"✓ Python zipfile extraction successful for {zip_basename} ({extracted_file_count} extracted, {skipped_existing_count} already exist)")
                     
                     # Increment count after completing entire ZIP file
                     extracted_zip_count += 1

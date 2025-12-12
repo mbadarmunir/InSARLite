@@ -83,203 +83,58 @@ Version 1.0.0 represents a mature, production-ready application with:
 ### Contributors
 We welcome and acknowledge all contributors to the InSARLite project. See our [GitHub repository](https://github.com/mbadarmunir/InSARLite) for a complete list of contributors.
 
-### Community
-InSARLite is supported by a growing community of users, including:
-- Academic researchers
-- Industry professionals
-- Students and educators
-- Open-source enthusiasts
+## Development
 
-## Research Applications
+InSARLite is developed as a solo effort with academic guidance and mentor support. The project aims to make InSAR processing accessible through an intuitive graphical interface built on top of GMTSAR.
 
-InSARLite has been used in numerous research applications:
+## Potential Applications
 
-### Earthquake Studies
-- Co-seismic deformation mapping
-- Post-seismic displacement monitoring
-- Fault parameter estimation
+InSARLite can be applied to various InSAR time series analysis scenarios:
 
-### Volcanic Monitoring
-- Volcanic inflation/deflation detection
-- Eruption precursor identification
-- Long-term volcanic hazard assessment
+- **Earthquake Studies**: Co-seismic and post-seismic deformation
+- **Volcanic Monitoring**: Inflation/deflation detection
+- **Urban Subsidence**: Infrastructure deformation tracking
+- **Landslide Monitoring**: Precursory deformation detection (as demonstrated in the Turkey case study)
 
-### Urban Subsidence
-- Land subsidence monitoring
-- Infrastructure deformation tracking
-- Groundwater depletion studies
+## Future Development
 
-### Natural Hazards
-- Landslide detection and monitoring
-- Flood impact assessment
-- Coastal erosion analysis
-
-## Educational Impact
-
-### Academic Integration
-InSARLite serves as an educational tool in:
-- University courses on remote sensing
-- Graduate student research training
-- Workshop and training programs
-- Self-directed learning initiatives
-
-### Learning Benefits
-- **Hands-on Experience**: Practical InSAR processing skills
-- **Concept Understanding**: Visual feedback reinforces theoretical concepts
-- **Research Preparation**: Real-world data analysis experience
-- **Career Development**: Industry-relevant technical skills
-
-## Recognition and Awards
-
-### Academic Recognition
-- Featured in academic publications
-- Used in university curricula
-- Presented at international conferences
-- Supported by research institutions
-
-### Community Impact
-- Growing user base worldwide
-- Active GitHub community
-- Positive user feedback and testimonials
-- Collaboration with other open-source projects
-
-## Future Vision
-
-### Short-term Goals (2025)
+Planned improvements include:
 - Enhanced processing algorithms
-- Improved user interface features
 - Additional data source support
 - Performance optimizations
+- Extended documentation and tutorials
 
-### Medium-term Objectives (2025-2026)
-- Machine learning integration
-- Cloud processing capabilities
-- Mobile/web interface development
-- Advanced analysis tools
+## Open Source Commitment
 
-### Long-term Vision (2026+)
-- AI-assisted processing workflows
-- Real-time processing capabilities
-- Integration with satellite constellation data
-- Global InSAR processing platform
-
-## Sustainability
-
-### Open Source Commitment
-InSARLite is committed to remaining open source under the MIT License, ensuring:
+InSARLite is open source under the MIT License, ensuring:
 - Free access for all users
 - Transparent development process
 - Community-driven improvements
 - Academic and commercial use freedom
 
-### Funding and Support
-The project is sustained through:
-- Academic institution support
-- Research grant funding
-- Community contributions
-- Industry partnerships
-
-### Long-term Maintenance
-We are committed to long-term project maintenance through:
-- Regular updates and bug fixes
-- Security patches and improvements
-- Documentation maintenance
-- Community support and engagement
-
-## Impact Metrics
-
-### Usage Statistics
-- Downloads across multiple platforms
-- Active user community
-- GitHub stars and forks
-- Documentation page views
-
-### Scientific Impact
-- Research papers using InSARLite
-- Citations in academic literature
-- Conference presentations
-- Educational institutions adopting the software
-
-### Community Engagement
-- GitHub issues and discussions
-- User-contributed improvements
-- Community tutorials and guides
-- International user base
-
-## Partnerships and Collaborations
-
-### Academic Institutions
-- Universities incorporating InSARLite in curricula
-- Research collaborations and joint projects
-- Student internships and thesis projects
-
-### Industry Partners
-- Companies using InSARLite for commercial applications
-- Technology partnerships and integrations
-- Professional training and consulting
-
-### Open Source Community
-- Contributions from global developers
-- Integration with other scientific software
-- Participation in open-source initiatives
-
 ## Contact and Support
 
-### Getting Help
-- **Documentation**: Comprehensive guides and references
-- **GitHub Issues**: Bug reports and feature requests
-- **Discussions**: Community forum for questions and ideas
-- **Email**: Direct contact for specific inquiries
+- **Documentation**: Comprehensive guides and tutorials
+- **GitHub Issues**: Bug reports and feature requests at [https://github.com/mbadarmunir/InSARLite](https://github.com/mbadarmunir/InSARLite)
+- **Discussions**: Community forum for questions
 
-### Contributing
-We welcome contributions in many forms:
+## Contributing
+
+Contributions are welcome:
 - Code contributions and bug fixes
 - Documentation improvements
-- Translation efforts
 - User testing and feedback
-- Community support and mentoring
-
-### Professional Services
-For organizations requiring:
-- Custom development and integration
-- Professional training and workshops
-- Technical support and consulting
-- Enterprise deployment assistance
+- Tutorial development
 
 ## Acknowledgments
 
-### Special Thanks
-We extend our gratitude to:
+Special thanks to:
 - The GMTSAR development team for the core processing engine
 - NASA and ESA for providing open access to SAR data
 - The Python scientific computing community
 - Academic advisors and mentors
-- Early adopters and beta testers
+- Extended documentation and tutorials
 
-### Funding Sources
-This project has been supported by:
-- Academic research grants
-- Institution computational resources
-- Community volunteer contributions
-- Open-source initiative support
+## License
 
-## License and Legal
-
-InSARLite is released under the MIT License, which allows:
-- Free use for any purpose
-- Modification and redistribution
-- Commercial use
-- Private use
-
-See the [License](license.md) page for complete legal details.
-
-## Stay Connected
-
-- **Website**: [Project homepage]
-- **GitHub**: [Repository and source code](https://github.com/mbadarmunir/InSARLite)
-- **Documentation**: [User guides and API reference]
-- **Community**: [Discussions and support forum]
-
----
-
-*InSARLite: Making InSAR accessible to everyone.* 🛰️📊
+InSARLite is released under the MIT License. See the [License](license.md) page for complete details.

@@ -6,6 +6,7 @@ including ASF searches, orbit downloads, and data downloads.
 
 import os
 import base64
+import time
 import tkinter as tk
 from tkinter import simpledialog
 from urllib.request import (
@@ -27,6 +28,8 @@ class EarthDataAuth:
         self.username = None
         self.password = None
         self._session = None
+        self._last_validation = 0  # Timestamp of last successful validation
+        self._validation_cache_duration = 300  # Cache validation for 5 minutes
         
     def _check_cookie(self):
         """Check if existing cookie is still valid."""
@@ -54,6 +57,8 @@ class EarthDataAuth:
     
     def _prompt_credentials(self):
         """Prompt user for EarthData credentials using GUI dialog."""
+        import threading
+        
         class LoginDialog(simpledialog.Dialog):
             def body(self, master):
                 tk.Label(master, text="EarthData Username:").grid(row=0, sticky="e", padx=5, pady=5)
@@ -70,15 +75,90 @@ class EarthDataAuth:
                     self.password_entry.get()
                 )
 
-        root = tk.Tk()
-        root.withdraw()
-        dialog = LoginDialog(root, title="EarthData Login Required")
-        root.destroy()
+        # Thread-safe credential prompting
+        credentials = [None]
+        exception_holder = [None]
         
-        if dialog.result:
-            username, password = dialog.result
-            if username and password:
-                return username, password
+        def prompt_in_main_thread():
+            try:
+                # Try to get existing root window first
+                try:
+                    root = tk._default_root
+                    if root is None:
+                        raise AttributeError
+                except (AttributeError, tk.TclError):
+                    # No existing root, create temporary one
+                    root = tk.Tk()
+                    root.withdraw()
+                    created_root = True
+                else:
+                    created_root = False
+                
+                dialog = LoginDialog(root, title="EarthData Login Required")
+                
+                # Only destroy if we created the root
+                if created_root:
+                    root.destroy()
+                
+                if dialog.result:
+                    username, password = dialog.result
+                    if username and password:
+                        credentials[0] = (username, password)
+                        return
+                        
+                exception_holder[0] = Exception("EarthData credentials are required for this operation.")
+                
+            except Exception as e:
+                exception_holder[0] = e
+        
+        # Check if we're in the main thread
+        if threading.current_thread() is threading.main_thread():
+            prompt_in_main_thread()
+        else:
+            # We're in a background thread, schedule GUI operation for main thread
+            try:
+                # Try to get the main root window
+                root = tk._default_root
+                if root is not None:
+                    # Use a more robust waiting mechanism
+                    import queue
+                    result_queue = queue.Queue()
+                    
+                    def wrapped_prompt():
+                        try:
+                            prompt_in_main_thread()
+                            result_queue.put(("success", None))
+                        except Exception as e:
+                            result_queue.put(("error", e))
+                    
+                    root.after_idle(wrapped_prompt)
+                    
+                    # Wait for result with timeout
+                    try:
+                        result_type, result_value = result_queue.get(timeout=30)  # 30 second timeout
+                        if result_type == "error":
+                            exception_holder[0] = result_value
+                    except queue.Empty:
+                        exception_holder[0] = Exception("Authentication dialog timed out")
+                else:
+                    # No main window available, fallback to console input
+                    raise Exception("GUI not available for credentials input")
+            except Exception:
+                # Fallback to console input if GUI is not available
+                import getpass
+                print("GUI not available, using console input for EarthData credentials:")
+                username = input("EarthData Username: ")
+                password = getpass.getpass("EarthData Password: ")
+                if username and password:
+                    credentials[0] = (username, password)
+                else:
+                    exception_holder[0] = Exception("EarthData credentials are required for this operation.")
+        
+        if exception_holder[0]:
+            raise exception_holder[0]
+        
+        if credentials[0]:
+            return credentials[0]
         
         raise Exception("EarthData credentials are required for this operation.")
     
@@ -119,11 +199,19 @@ class EarthDataAuth:
         Returns:
             bool: True if authenticated successfully
         """
+        # Check if we have a recent successful validation (within cache duration)
+        current_time = time.time()
+        if (not force_new and 
+            self._last_validation > 0 and 
+            (current_time - self._last_validation) < self._validation_cache_duration):
+            return True
+            
         if not force_new and os.path.isfile(self.cookie_jar_path):
             try:
                 self.cookie_jar.load(self.cookie_jar_path)
                 if self._check_cookie():
                     print("✓ Using existing EarthData authentication")
+                    self._last_validation = current_time
                     return True
                 else:
                     print("⚠ Existing authentication expired")
@@ -141,6 +229,7 @@ class EarthDataAuth:
                 if self._authenticate_with_credentials(username, password):
                     if self._check_cookie():
                         print("✓ EarthData authentication successful")
+                        self._last_validation = current_time
                         return True
                     
                 print(f"❌ Authentication failed (attempt {attempt + 1}/{max_attempts})")
@@ -159,21 +248,24 @@ class EarthDataAuth:
         Returns:
             requests.Session: Authenticated session ready for EarthData requests
         """
+        # Return existing session if available and recently validated
+        if self._session is not None:
+            return self._session
+            
         if not self.ensure_authenticated():
             raise Exception("Could not establish EarthData authentication")
         
-        if self._session is None:
-            self._session = requests.Session()
-            
-            # Add cookies to the session
-            if os.path.isfile(self.cookie_jar_path):
-                self.cookie_jar.load(self.cookie_jar_path)
-                for cookie in self.cookie_jar:
-                    self._session.cookies.set(cookie.name, cookie.value, domain=cookie.domain)
-            
-            # Set authentication credentials as backup
-            if self.username and self.password:
-                self._session.auth = (self.username, self.password)
+        self._session = requests.Session()
+        
+        # Add cookies to the session
+        if os.path.isfile(self.cookie_jar_path):
+            self.cookie_jar.load(self.cookie_jar_path)
+            for cookie in self.cookie_jar:
+                self._session.cookies.set(cookie.name, cookie.value, domain=cookie.domain)
+        
+        # Set authentication credentials as backup
+        if self.username and self.password:
+            self._session.auth = (self.username, self.password)
         
         return self._session
     
@@ -216,6 +308,7 @@ class EarthDataAuth:
             self.cookie_jar.clear()
             self.username = None
             self.password = None
+            self._last_validation = 0  # Clear validation cache
             if self._session:
                 self._session.close()
                 self._session = None

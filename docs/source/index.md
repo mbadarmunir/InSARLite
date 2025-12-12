@@ -10,7 +10,7 @@ Welcome to **InSARLite**, a comprehensive GUI application for Interferometric Sy
 :alt: License
 ```
 
-```{image} https://img.shields.io/badge/version-1.0.0-blue.svg
+```{image} https://img.shields.io/badge/version-1.3.0-blue.svg
 :alt: Version
 ```
 
@@ -24,49 +24,6 @@ Interferometric Synthetic Aperture Radar (InSAR) is a radar technique used to ge
 - **Advanced visualization tools** for results analysis
 - **Time series processing** capabilities
 
-## Key Features
-
-::::{grid} 1 2 2 3
-:gutter: 3
-
-:::{grid-item-card} 🛰️ Data Management
-:class-card: sd-text-center
-
-Automated download of Sentinel-1 data with EarthData authentication, orbit files, and DEM data
-:::
-
-:::{grid-item-card} 🎯 Interactive Planning
-:class-card: sd-text-center
-
-Visual baseline network design with matplotlib-based interactive plotting and selection tools
-:::
-
-:::{grid-item-card} ⚡ Automated Processing
-:class-card: sd-text-center
-
-Complete GMTSAR workflow integration from raw data to unwrapped interferograms
-:::
-
-:::{grid-item-card} 📊 Advanced Visualization
-:class-card: sd-text-center
-
-Professional plotting tools with customizable displays and analysis capabilities
-:::
-
-:::{grid-item-card} 🔧 Extensible Architecture
-:class-card: sd-text-center
-
-Modular design allowing for custom processing workflows and plugin development
-:::
-
-:::{grid-item-card} 🌐 Cross-Platform
-:class-card: sd-text-center
-
-Works on Linux, macOS, and Windows with consistent user experience
-:::
-
-::::
-
 ## Quick Start
 
 ### Installation
@@ -77,29 +34,50 @@ Install InSARLite using pip:
 pip install insarlite
 ```
 
+For detailed installation instructions including GMTSAR setup, see the [Installation Guide](installation.md).
+
 ### Launch the Application
 
 ```bash
 InSARLiteApp
 ```
 
-## Documentation Sections
+On first launch, InSARLite will automatically detect and install GMTSAR if needed.
+
+## Learn by Example
+
+The best way to learn InSARLite is through our comprehensive tutorial using real research data:
+
+**[Turkey Landslide Case Study →](tutorials/turkey-case-study.md)**
+
+This tutorial demonstrates the complete InSARLite workflow using 60 Sentinel-1 acquisitions to detect precursory deformation signals before the December 8, 2024 Güngören landslide in Turkey. You'll learn:
+
+- Complete project setup from installation to results
+- Data querying, downloading, and extraction
+- Interactive baseline network design
+- Interferogram generation and unwrapping
+- SBAS time series analysis
+- Publication-quality visualization
+
+**Processing time**: ~50 hours | **Storage required**: ~710 GB
+
+## Documentation Structure
 
 ```{toctree}
 :maxdepth: 2
-:caption: User Guide
+:caption: Getting Started
 
+user-guide/overview
 installation
 quickstart
-user-guide/index
 tutorials/index
 ```
 
 ```{toctree}
 :maxdepth: 2
-:caption: API Reference
+:caption: User Guide
 
-api/index
+user-guide/index
 ```
 
 ```{toctree}
@@ -107,8 +85,6 @@ api/index
 :caption: Developer Guide
 
 developer-guide/index
-contributing
-changelog
 ```
 
 ```{toctree}
@@ -116,6 +92,8 @@ changelog
 :caption: About
 
 about
+contributing
+changelog
 license
 ```
 
@@ -134,7 +112,7 @@ If you use InSARLite in your research, please cite:
   title={InSARLite: A GUI Application for GMTSAR-based InSAR Processing},
   author={Muhammad Badar Munir},
   year={2025},
-  version={1.0.0},
+  version={1.3.0},
   url={https://github.com/mbadarmunir/InSARLite}
 }
 ```

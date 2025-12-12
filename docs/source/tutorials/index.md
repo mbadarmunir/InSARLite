@@ -1,78 +1,59 @@
-# Tutorials
+# Turkey Landslide Tutorial
 
-Step-by-step tutorials for common InSAR processing scenarios using InSARLite.
-
-## Available Tutorials
+This section contains a comprehensive tutorial demonstrating InSARLite's complete workflow.
 
 ```{toctree}
 :maxdepth: 2
 
-earthquake-study
-volcano-monitoring
-urban-subsidence
+turkey-case-study
 ```
 
 ## Tutorial Overview
 
-These tutorials provide hands-on experience with InSARLite for specific use cases:
+The **[Turkey Landslide Case Study](turkey-case-study.md)** provides a complete end-to-end demonstration of InSAR time series analysis using InSARLite. This tutorial uses real research data from the December 8, 2024 Güngören landslide event in northeastern Turkey.
 
-### 🔥 [Earthquake Study](earthquake-study.md)
-Learn how to process co-seismic deformation using InSARLite. This tutorial covers:
-- Pre- and post-earthquake data selection
-- Optimal baseline configuration for seismic events
-- Interpreting deformation patterns
-- Creating publication-ready figures
+### What You'll Learn
 
-### 🌋 [Volcano Monitoring](volcano-monitoring.md)
-Process volcanic deformation signals with InSARLite. Topics include:
-- Long-term monitoring strategies
-- Handling coherence loss over volcanic terrain
-- Time series analysis for volcanic signals
-- Atmospheric correction techniques
+- **Installation**: GMTSAR automatic setup and verification
+- **Project Configuration**: Data folder, AOI definition, temporal range
+- **Data Management**: Querying, downloading, and extracting Sentinel-1 data
+- **Baseline Network**: Interactive design using Base2Net tool
+- **Interferogram Generation**: Alignment and IFG creation
+- **Phase Unwrapping**: Masking, reference point selection, and unwrapping
+- **SBAS Analysis**: Time series inversion and velocity mapping
+- **Visualization**: Interactive exploration of deformation results
 
-### 🏙️ [Urban Subsidence](urban-subsidence.md)
-Monitor urban land subsidence using persistent scatterer techniques:
-- Urban area processing considerations
-- Long time series for subsidence monitoring
-- Identifying and analyzing persistent scatterers
-- Correlation with infrastructure and geology
+### Dataset Details
 
-## Before You Start
+- **Location**: Güngören, northeastern Turkey (41.34°N, 41.27°E)
+- **Event**: Catastrophic landslide failure on December 8, 2024
+- **Satellite**: Sentinel-1 ascending orbit
+- **Acquisitions**: 60 scenes covering ~18 months
+- **Master Scene**: August 29, 2023
+- **Subswath**: IW2 (F2 only)
+- **Results**: Mean VLOS velocities up to 25 mm/yr, precursory acceleration detected
+
+### Time and Storage Requirements
+
+- **Processing Time**: ~50+ hours (highly dependent on CPU cores and internet speed)
+- **Storage Space**: ~710 GB total (328.8 GB downloads + ~320 GB processing + ~60 GB outputs)
+- **Download Time**: 1-3 hours (depends on internet connection)
+- **RAM**: 16 GB minimum, 32 GB strongly recommended
 
 ### Prerequisites
-- InSARLite installed and configured
-- NASA EarthData account
-- Basic understanding of InSAR principles
-- Sufficient storage space (50+ GB recommended)
 
-### Tutorial Data
-Each tutorial includes:
-- Sample datasets or download instructions
-- Processing parameters
-- Expected results for validation
-- Troubleshooting tips
+Before starting this tutorial:
 
-### Estimated Time
-- **Earthquake Study**: 2-3 hours
-- **Volcano Monitoring**: 3-4 hours  
-- **Urban Subsidence**: 4-5 hours
+1. **Install InSARLite**: Follow the [Installation Guide](../installation.md)
+2. **NASA EarthData Account**: Register at [https://urs.earthdata.nasa.gov/](https://urs.earthdata.nasa.gov/)
+3. **System Requirements**: Ubuntu 20.04 or 22.04 LTS
+4. **Multi-core CPU**: Strongly recommended for parallel processing
+5. **Basic InSAR Knowledge**: Understanding of interferometry principles helpful but not required
 
-## Getting Help
+### Getting Help
 
-If you encounter issues with any tutorial:
+If you encounter issues:
 
-1. Check the troubleshooting section in each tutorial
-2. Review the [Troubleshooting Guide](../user-guide/troubleshooting.md)
-3. Search [GitHub Issues](https://github.com/mbadarmunir/InSARLite/issues)
-4. Create a new issue with your specific problem
-
-## Contributing Tutorials
-
-We welcome community contributions of new tutorials! If you'd like to contribute:
-
-1. Follow the existing tutorial format
-2. Include real-world examples
-3. Provide validation datasets
-4. Test with fresh InSARLite installation
-
-Contact us through GitHub Issues to discuss your tutorial idea.
+- Check troubleshooting sections within the tutorial
+- Search [GitHub Issues](https://github.com/mbadarmunir/InSARLite/issues)
+- Create a new issue with error details and screenshots

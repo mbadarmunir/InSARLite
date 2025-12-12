@@ -4,13 +4,44 @@ import threading
 import datetime
 import tkinter as tk
 from tkinter import messagebox
-from tkcalendar import DateEntry
+import platform
+
+# WSL/Linux detection for calendar widget compatibility
+def is_wsl_or_problematic_env():
+    """Detect if running in WSL where calendar popups might not work properly"""
+    try:
+        # Check specifically for WSL (not general Linux)
+        if 'microsoft' in platform.uname().release.lower():
+            return True
+        # Check for WSL2 specifically
+        if 'Microsoft' in platform.uname().release:
+            return True
+        # Check for specific WSL environment variables
+        if 'WSL_DISTRO_NAME' in os.environ:
+            return True
+        return False
+    except:
+        return False
+
+# Conditional import of DateEntry
+USE_CALENDAR_WIDGET = not is_wsl_or_problematic_env()
+
+if USE_CALENDAR_WIDGET:
+    try:
+        from tkcalendar import DateEntry
+    except ImportError:
+        USE_CALENDAR_WIDGET = False
+        print("⚠️  tkcalendar not available, using text entry fields for dates")
+
+if not USE_CALENDAR_WIDGET:
+    print("📅 Using text entry fields for dates (calendar widgets disabled for compatibility)")
+
 from tkintermapview import TkinterMapView
 import glob
 from .utils.utils import (
     browse_folder, browse_file, extr_ext_TL, configure_zooming_ui,
     submit_gacos_batch, estimate_s1_slc_frames,
-    check_align_completion, check_ifgs_completion, check_merge_completion, process_logger, add_tooltip
+    check_alignment_completion_status, check_ifgs_completion, check_merge_completion, process_logger, add_tooltip
 )
 from .utils.file_operations import (
     clamp, get_safe_and_zip_files, are_files_identical,
@@ -78,28 +109,12 @@ class InSARLiteApp:
         os._exit(0)
 
     def _check_gmtsar_installation(self):
-        """Check if GMTSAR is available by running gmtsar.csh command."""
-        try:
-            # Check if gmtsar.csh is accessible using which command
-            result = subprocess.run(['which', 'gmtsar.csh'], 
-                                  capture_output=True, 
-                                  text=True, 
-                                  timeout=5)
-            
-            if result.returncode == 0:
-                print(f"✅ GMTSAR found at: {result.stdout.strip()}")
-                
-                # GMTSAR is available - now check SBAS parallel
-                from .utils.gmtsar_installer import check_and_install_sbas_parallel
-                check_and_install_sbas_parallel()
-                return
-                
-        except (FileNotFoundError, subprocess.TimeoutExpired, subprocess.CalledProcessError):
-            pass  # GMTSAR not found, need to install
+        """Check if GMTSAR is available using projects file optimization."""
+        # Get projects file path from config_manager
+        projects_file = config_manager.projects_file
         
-        # GMTSAR not found - must install it
-        print("GMTSAR not found. Checking for installation...")
-        success = check_and_install_gmtsar(gui_mode=True)
+        # Use optimized check that first looks for projects file
+        success = check_and_install_gmtsar(projects_file)
         
         if success == "close_app":
             # GMTSAR was installed, but app needs to close for environment variables to take effect
@@ -593,12 +608,41 @@ class InSARLiteApp:
         map_container.grid(row=0, column=0, sticky="nsew")
         map_container.grid_rowconfigure(0, weight=1)
         map_container.grid_columnconfigure(0, weight=1)
-        self.map_widget = TkinterMapView(map_container, corner_radius=0)
-        self.map_widget.grid(row=0, column=0, sticky="nsew")
-        self.map_widget.set_zoom(1)
-        self.map_widget.set_position(20, 0)
-        map_container.bind("<Configure>", lambda event: self.map_widget.config(width=event.width, height=event.height))
-        self.map_widget.add_left_click_map_command(self._on_map_click_with_limits_and_update)
+        
+        try:
+            self.map_widget = TkinterMapView(map_container, corner_radius=0)
+            self.map_widget.grid(row=0, column=0, sticky="nsew")
+            self.map_widget.set_zoom(1)
+            self.map_widget.set_position(20, 0)
+            map_container.bind("<Configure>", lambda event: self.map_widget.config(width=event.width, height=event.height))
+            
+            # Test map click binding with error handling
+            try:
+                self.map_widget.add_left_click_map_command(self._on_map_click_with_limits_and_update)
+                print("✅ Map click handler successfully bound")
+            except Exception as click_error:
+                print(f"⚠️ Warning: Could not bind map click handler: {click_error}")
+                print("   Map clicking will not work - please use extent text boxes")
+                # Create fallback message overlay
+                error_label = tk.Label(map_container, 
+                                     text="Map clicking disabled\nUse extent text boxes instead\n\nTo fix: pip install --upgrade tkintermapview",
+                                     bg="lightyellow", fg="orange", 
+                                     justify="center", padx=10, pady=5,
+                                     relief="raised", borderwidth=2)
+                error_label.place(relx=0.5, rely=0.05, anchor="center")
+                
+        except Exception as map_error:
+            print(f"❌ Error creating map widget: {map_error}")
+            print("   Creating fallback map display")
+            # Create fallback widget
+            fallback_frame = tk.Frame(map_container, bg="lightgray")
+            fallback_frame.grid(row=0, column=0, sticky="nsew")
+            error_msg = tk.Label(fallback_frame, 
+                                text="Map Widget Error\nPlease use extent text boxes\n\nInstall missing dependencies:\npip install --upgrade tkintermapview pillow",
+                                bg="lightgray", fg="red", 
+                                justify="center", padx=20, pady=20)
+            error_msg.pack(expand=True)
+            return
 
         # Securely refresh the map once everything is loaded
         def refresh_map():
@@ -607,8 +651,9 @@ class InSARLiteApp:
                 self.map_widget.set_zoom(self.map_widget.zoom + 1)
                 self.map_widget.set_zoom(self.map_widget.zoom - 1)
                 self.map_widget.set_position(20, 0)
-            except Exception:
-                pass
+                print("✅ Map widget refreshed successfully")
+            except Exception as refresh_error:
+                print(f"⚠️ Warning: Could not refresh map: {refresh_error}")
 
         # Bind to root's initial idle event after window is shown
         self.root.after(500, refresh_map)
@@ -634,36 +679,60 @@ class InSARLiteApp:
         add_tooltip(start_label, "Start date for data acquisition period")
         
         start_var = tk.StringVar()
-        # Configure DateEntry to allow manual typing
-        start_date = DateEntry(
-            frame, 
-            textvariable=start_var, 
-            date_pattern="yyyy-mm-dd", 
-            width=12, 
-            maxdate=today,
-            state="normal",  # Allow manual editing
-            validate="none"  # Don't validate on every keystroke
-        )
+        
+        if USE_CALENDAR_WIDGET:
+            # Use DateEntry with calendar popup
+            start_date = DateEntry(
+                frame, 
+                textvariable=start_var, 
+                date_pattern="yyyy-mm-dd", 
+                width=12, 
+                maxdate=today,
+                state="normal",  # Allow manual editing
+                validate="none"  # Don't validate on every keystroke
+            )
+            add_tooltip(start_date, "Enter date as YYYY-MM-DD or click calendar icon.\nType directly in the field or use calendar picker.")
+        else:
+            # Use simple text entry (WSL/Linux fallback)
+            start_date = tk.Entry(
+                frame,
+                textvariable=start_var,
+                width=12,
+                validate="none"
+            )
+            add_tooltip(start_date, "Enter date as YYYY-MM-DD format.\nExample: 2024-01-15")
+        
         start_date.grid(row=0, column=1, padx=(0, 8))
-        add_tooltip(start_date, "Enter date as YYYY-MM-DD or click calendar icon.\nType directly in the field or use calendar picker.")
         
         end_label = tk.Label(frame, text="End")
         end_label.grid(row=0, column=4, padx=(0, 2))
         add_tooltip(end_label, "End date for data acquisition period")
         
         end_var = tk.StringVar()
-        # Configure DateEntry to allow manual typing
-        end_date = DateEntry(
-            frame, 
-            textvariable=end_var, 
-            date_pattern="yyyy-mm-dd", 
-            width=12, 
-            maxdate=today,
-            state="normal",  # Allow manual editing
-            validate="none"  # Don't validate on every keystroke
-        )
+        
+        if USE_CALENDAR_WIDGET:
+            # Use DateEntry with calendar popup
+            end_date = DateEntry(
+                frame, 
+                textvariable=end_var, 
+                date_pattern="yyyy-mm-dd", 
+                width=12, 
+                maxdate=today,
+                state="normal",  # Allow manual editing
+                validate="none"  # Don't validate on every keystroke
+            )
+            add_tooltip(end_date, "Enter date as YYYY-MM-DD or click calendar icon.\nMust be after start date and not in the future.")
+        else:
+            # Use simple text entry (WSL/Linux fallback)
+            end_date = tk.Entry(
+                frame,
+                textvariable=end_var,
+                width=12,
+                validate="none"
+            )
+            add_tooltip(end_date, "Enter date as YYYY-MM-DD format.\nExample: 2024-12-31\nMust be after start date.")
+        
         end_date.grid(row=0, column=5, padx=(0, 2))
-        add_tooltip(end_date, "Enter date as YYYY-MM-DD or click calendar icon.\nMust be after start date and not in the future.")
         
         start_var.set("")
         end_var.set("")
@@ -823,18 +892,28 @@ class InSARLiteApp:
         self.root.bind_all("<Button-1>", self._try_draw_wrapper, add="+")
         # Bind date entry events with improved logic
         for widget in (self.start_date, self.end_date):
-            # Immediate validation only for calendar selection and focus events
-            # Note: No folder change binding on dates - folder change should only happen on data folder changes
-            for event in ("<<DateEntrySelected>>", "<FocusOut>"):
-                widget.bind(event, self._validate_dates_gentle_wrapper, add="+")
-                widget.bind(event, self._enforce_date_wrapper, add="+")
-            
-            # For Enter and Tab, validate but don't trigger folder change
-            for event in ("<Return>", "<Tab>", "<Shift-Tab>"):
-                widget.bind(event, self._on_date_entry_complete, add="+")
-            
-            # For typing, use debounced validation (delayed)
-            widget.bind("<KeyRelease>", self._on_date_key_release, add="+")
+            if USE_CALENDAR_WIDGET:
+                # Calendar widget event bindings
+                for event in ("<<DateEntrySelected>>", "<FocusOut>"):
+                    widget.bind(event, self._validate_dates_gentle_wrapper, add="+")
+                
+                # Only enforce limits when calendar is used (not when typing)
+                widget.bind("<<DateEntrySelected>>", self._enforce_date_wrapper, add="+")
+                
+                # For Enter and Tab, validate but don't trigger folder change
+                for event in ("<Return>", "<Tab>", "<Shift-Tab>"):
+                    widget.bind(event, self._on_date_entry_complete, add="+")
+                
+                # For typing, use debounced validation (delayed)
+                widget.bind("<KeyRelease>", self._on_date_key_release, add="+")
+            else:
+                # Text entry widget event bindings (WSL/Linux fallback)
+                for event in ("<FocusOut>", "<Return>", "<Tab>", "<Shift-Tab>"):
+                    widget.bind(event, self._validate_dates_gentle_wrapper, add="+")
+                    widget.bind(event, self._on_date_entry_complete, add="+")
+                
+                # For typing, use debounced validation (delayed)
+                widget.bind("<KeyRelease>", self._on_date_key_release, add="+")
         
         for event in ("<Return>", "<Tab>", "<Shift-Tab>"):
             self.data_folder_entry.bind(event, self._on_data_folder_change_wrapper, add="+")
@@ -843,9 +922,10 @@ class InSARLiteApp:
 
     def _on_date_entry_complete(self, event=None):
         """Handle when user completes date entry (Enter/Tab)."""
-        # Validate but don't trigger folder change - dates are independent of folder
+        # Validate gently - this won't auto-correct during typing
         self._validate_dates_gentle_wrapper(event)
-        self._enforce_date_wrapper(event)
+        # Only enforce limits if query button is not active
+        # (the enforce wrapper now has this logic built-in)
 
     def _on_date_key_release(self, event=None):
         """Handle keystrokes in date entries with debouncing."""
@@ -882,7 +962,18 @@ class InSARLiteApp:
     def _enforce_date_wrapper(self, event=None):
         """Wrapper for enforce_date_limits function."""
         if hasattr(self, 'date_limits') and hasattr(self, 'start_var') and hasattr(self, 'end_var'):
-            enforce_date_limits(self.start_var, self.end_var, self.date_limits)
+            # Check if query button is active (visible and enabled)
+            query_btn_active = (
+                hasattr(self, 'data_query_btn') and 
+                self.data_query_btn is not None and 
+                self.data_query_btn.winfo_exists() and
+                self.data_query_btn.winfo_viewable() and
+                str(self.data_query_btn['state']) != 'disabled'
+            )
+            
+            # Only enforce date limits when query button is NOT active
+            if not query_btn_active:
+                enforce_date_limits(self.start_var, self.end_var, self.date_limits)
     
     def _validate_dates_gentle_wrapper(self, event=None):
         """Wrapper for validate_dates_gentle function."""
@@ -926,8 +1017,92 @@ class InSARLiteApp:
 
     # --- Map and Polygon Helpers ---
     def _on_map_click_with_limits_and_update(self, coords):
-        on_map_click_with_limits(coords, self.extent_limits, self.map_widget, "_map_click_start")
-        self.root.after(200, lambda: self._update_data_query_btn_state_wrapper())
+        try:
+            print(f"🖱️ Map clicked at coordinates: {coords}")
+            
+            # Check if we have a pending first click
+            has_pending_click = hasattr(self.map_widget, "_map_click_start")
+            print(f"🔍 Pending first click: {has_pending_click}")
+            
+            if has_pending_click:
+                first_coords = getattr(self.map_widget, "_map_click_start")
+                print(f"📍 Completing rectangle from {first_coords} to {coords}")
+            
+            result = on_map_click_with_limits(coords, self.extent_limits, self.map_widget, "_map_click_start")
+            
+            if result:
+                print(f"✅ Rectangle completed: {result}")
+                # Update extent entries with the completed rectangle
+                s, w, n, e = result
+                
+                # Clear any existing rectangle first
+                try:
+                    if self.rect_shape[0]:
+                        print("🗑️ Clearing previous rectangle")
+                        self.rect_shape[0].delete()
+                        self.rect_shape[0] = None
+                except Exception as e:
+                    print(f"⚠️ Warning clearing previous rectangle: {e}")
+                
+                # Update entries and draw new rectangle
+                update_extent_entries_from_map((s, w, n, e), self.n_entry, self.s_entry, self.w_entry, self.e_entry, 
+                                               lambda s, w, n, e: draw_rectangle_on_map(self.map_widget, self.rect_shape, self.data_browse, s, w, n, e))
+                print(f"📝 Extent entries updated with: N={n}, S={s}, E={e}, W={w}")
+                
+                # Force map refresh and verify rectangle is drawn
+                try:
+                    if hasattr(self.map_widget, 'update'):
+                        self.map_widget.update()
+                    if self.rect_shape[0]:
+                        print("🎯 Rectangle successfully drawn and visible")
+                    else:
+                        print("❌ Warning: Rectangle not visible after drawing")
+                except Exception as e:
+                    print(f"⚠️ Warning during map refresh: {e}")
+                    
+            else:
+                print("📍 First click registered, waiting for second click")
+                
+            # Check final state
+            still_pending = hasattr(self.map_widget, "_map_click_start")
+            print(f"🔍 After processing - still pending: {still_pending}")
+            
+            # Add rectangle verification
+            if self.rect_shape[0]:
+                print("🎯 Current rectangle status: ACTIVE")
+            else:
+                print("🎯 Current rectangle status: NONE")
+            
+            self.root.after(200, lambda: self._update_data_query_btn_state_wrapper())
+        except Exception as e:
+            print(f"❌ Error in map click handler: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def test_rectangle_drawing(self, test_coords=(40.0, 35.0, 42.0, 39.0)):
+        """Test method to manually draw a rectangle for debugging."""
+        try:
+            s, w, n, e = test_coords
+            print(f"🧪 Testing rectangle drawing with coords: S={s}, W={w}, N={n}, E={e}")
+            
+            # Clear existing rectangle
+            if self.rect_shape[0]:
+                self.rect_shape[0].delete()
+                self.rect_shape[0] = None
+                print("🗑️ Cleared existing test rectangle")
+            
+            # Draw test rectangle
+            draw_rectangle_on_map(self.map_widget, self.rect_shape, self.data_browse, s, w, n, e)
+            
+            if self.rect_shape[0]:
+                print("✅ Test rectangle drawn successfully")
+                return True
+            else:
+                print("❌ Test rectangle failed to draw")
+                return False
+        except Exception as e:
+            print(f"❌ Test rectangle error: {e}")
+            return False
 
     # --- Legend and Polygon Display ---
     def _clear_legend(self):
@@ -981,7 +1156,12 @@ class InSARLiteApp:
         for i, frame in enumerate(self.legend_items):
             frame.config(bg="#cceeff" if i == idx else self.legend_display_frame.cget("bg"))
         self.legend_selected_idx[0] = idx
-        threading.Thread(target=lambda: self.root.after(0, self._highlight_polygon, idx)).start()
+        # Schedule polygon highlighting safely without creating unnecessary threads
+        try:
+            if hasattr(self, 'root') and self.root and self.root.winfo_exists():
+                self.root.after(0, self._highlight_polygon, idx)
+        except Exception as e:
+            print(f"Warning: Could not schedule polygon highlight: {e}")
         result = getattr(self.on_data_query, "last_result", None)
         if result and idx < len(result):
             self.selected_files_info = result[idx].get('files_info')
@@ -1031,7 +1211,12 @@ class InSARLiteApp:
                 if self.on_data_query.polygons:
                     self._on_legend_item_click(0)
                 self._show_data_download_btn()
-            self.root.after(0, update_gui)
+            # Schedule GUI update safely
+            try:
+                if hasattr(self, 'root') and self.root and self.root.winfo_exists():
+                    self.root.after(0, update_gui)
+            except Exception as e:
+                print(f"Warning: Could not schedule GUI update: {e}")
         threading.Thread(target=run_query).start()
 
     def _show_data_download_btn(self):
@@ -1094,58 +1279,78 @@ class InSARLiteApp:
         self._last_stats = {}
 
         def update_stats(stats):
-            def format_time(seconds):
-                if not isinstance(seconds, (int, float)) or math.isnan(seconds) or math.isinf(seconds):
-                    return "inf"
-                seconds = int(seconds)
-                hours = seconds // 3600
-                minutes = (seconds % 3600) // 60
-                secs = seconds % 60
-                return f"{hours:02}h:{minutes:02}m:{secs:02}s" if hours > 0 else f"{minutes:02}m:{secs:02}s"
-            def format_bytes(num_bytes):
-                num_bytes = float(num_bytes)
-                if num_bytes < 1024**2:
-                    return f"{num_bytes/1024:.2f} KB"
-                elif num_bytes < 1024**3:
-                    return f"{num_bytes/1024**2:.2f} MB"
-                else:
-                    return f"{num_bytes/1024**3:.2f} GB"
-            def format_speed(bytes_per_sec):
-                bytes_per_sec = float(bytes_per_sec)
-                if bytes_per_sec < 1024:
-                    return f"{bytes_per_sec:.2f} B/s"
-                elif bytes_per_sec < 1024**2:
-                    return f"{bytes_per_sec/1024:.2f} KB/s"
-                elif bytes_per_sec < 1024**3:
-                    return f"{bytes_per_sec/1024**2:.2f} MB/s"
-                else:
-                    return f"{bytes_per_sec/1024**3:.2f} GB/s"
-            if isinstance(stats, dict):
-                percent_complete = stats.get('percent_complete')
-                total_expected_size = self.total_expected_size if self.total_expected_size is not None else 0
-                if percent_complete is None:
-                    total_downloaded = stats.get('total_downloaded', 0)
-                    percent_complete = 100.0 * total_downloaded / total_expected_size if total_expected_size else 0.0
-                eta_seconds = stats.get('eta_seconds')
-                if eta_seconds is None:
-                    current_speed = stats.get('current_speed', 0)
-                    total_downloaded = stats.get('total_downloaded', 0)
-                    eta_seconds = (total_expected_size - total_downloaded) / current_speed if current_speed > 0 and total_expected_size > 0 else 0
-                formatted = {
-                    "Elapsed": format_time(stats.get("elapsed", 0)),
-                    "Downloaded": f"{format_bytes(stats.get('total_downloaded', 0))}/{format_bytes(stats.get('total_expected_size', total_expected_size))}",
-                    "Speed": format_speed(stats.get("current_speed", 0)),
-                    "Mean": format_speed(stats.get("mean_speed", 0)),
-                    "Completion": f"{percent_complete:.1f}%",
-                    "ETA": format_time(eta_seconds),
-                }
-                # Ensure labels exist before updating
-                if hasattr(self, "download_stats_labels") and self.download_stats_labels:
-                    for key, value in formatted.items():
-                        label = self.download_stats_labels.get(key)
-                        if label and hasattr(label, "config"):
-                            label.config(text=value)
-                self._last_stats = stats
+            try:
+                if not stats or not isinstance(stats, dict):
+                    return  # Skip invalid stats
+                    
+                def format_time(seconds):
+                    if not isinstance(seconds, (int, float)) or math.isnan(seconds) or math.isinf(seconds):
+                        return "inf"
+                    seconds = int(seconds)
+                    hours = seconds // 3600
+                    minutes = (seconds % 3600) // 60
+                    secs = seconds % 60
+                    return f"{hours:02}h:{minutes:02}m:{secs:02}s" if hours > 0 else f"{minutes:02}m:{secs:02}s"
+                def format_bytes(num_bytes):
+                    num_bytes = float(num_bytes)
+                    if num_bytes < 1024**2:
+                        return f"{num_bytes/1024:.1f} KB"
+                    elif num_bytes < 1024**3:
+                        return f"{num_bytes/1024**2:.1f} MB"
+                    else:
+                        return f"{num_bytes/1024**3:.2f} GB"
+                def format_speed(bytes_per_sec):
+                    bytes_per_sec = float(bytes_per_sec)
+                    if bytes_per_sec < 1024:
+                        return f"{bytes_per_sec:.0f} B/s"
+                    elif bytes_per_sec < 1024**2:
+                        return f"{bytes_per_sec/1024:.1f} KB/s"
+                    elif bytes_per_sec < 1024**3:
+                        return f"{bytes_per_sec/1024**2:.1f} MB/s"
+                    else:
+                        return f"{bytes_per_sec/1024**3:.2f} GB/s"
+                
+                # Throttle UI updates to prevent jitter (max once per second)
+                now = time.time()
+                if not hasattr(update_stats, 'last_update_time'):
+                    update_stats.last_update_time = 0
+                
+                if now - update_stats.last_update_time < 1.0:
+                    # Too soon since last update, skip this one
+                    self._last_stats = stats
+                    return
+                
+                update_stats.last_update_time = now
+                
+                if isinstance(stats, dict):
+                    percent_complete = stats.get('percent_complete')
+                    total_expected_size = self.total_expected_size if self.total_expected_size is not None else 0
+                    if percent_complete is None:
+                        total_downloaded = stats.get('total_downloaded', 0)
+                        percent_complete = 100.0 * total_downloaded / total_expected_size if total_expected_size else 0.0
+                    eta_seconds = stats.get('eta_seconds')
+                    if eta_seconds is None:
+                        current_speed = stats.get('current_speed', 0)
+                        total_downloaded = stats.get('total_downloaded', 0)
+                        eta_seconds = (total_expected_size - total_downloaded) / current_speed if current_speed > 0 and total_expected_size > 0 else 0
+                    formatted = {
+                        "Elapsed": format_time(stats.get("elapsed", 0)),
+                        "Downloaded": f"{format_bytes(stats.get('total_downloaded', 0))}/{format_bytes(stats.get('total_expected_size', total_expected_size))}",
+                        "Speed": format_speed(stats.get("current_speed", 0)),
+                        "Mean": format_speed(stats.get("mean_speed", 0)),
+                        "Completion": f"{percent_complete:.1f}%",
+                        "ETA": format_time(eta_seconds),
+                    }
+                    # Ensure labels exist before updating
+                    if hasattr(self, "download_stats_labels") and self.download_stats_labels:
+                        for key, value in formatted.items():
+                            label = self.download_stats_labels.get(key)
+                            if label and hasattr(label, "config"):
+                                label.config(text=value)
+                    self._last_stats = stats
+            except Exception as e:
+                print(f"Warning: Stats update error: {e}")
+                # Don't crash on stats update failures
 
         def run_download():
             error = None
@@ -1154,8 +1359,16 @@ class InSARLiteApp:
             self._last_stats = {}
 
             def progress_callback(stats):
-                self.root.after(0, lambda: update_stats(stats))
-                self._last_stats = stats
+                # Ensure we capture the stats data and avoid lambda closure issues
+                stats_copy = dict(stats) if stats else {}
+                try:
+                    # Add extra defensive checks for thread safety
+                    if hasattr(self, 'root') and self.root and self.root.winfo_exists():
+                        self.root.after(0, lambda s=stats_copy: update_stats(s))
+                    self._last_stats = stats_copy
+                except Exception as e:
+                    print(f"Warning: Progress callback error: {e}")
+                    # Don't crash on UI update failures
 
             try:
                 download_sentinel1_acquisitions(
@@ -1200,7 +1413,12 @@ class InSARLiteApp:
                     elif hasattr(self, '_extract_btn'):
                         # Re-show the zip extraction button for downloaded files
                         self._show_zip_extraction_controls()
-            self.root.after(0, after_download)
+            # Schedule after_download callback safely
+            try:
+                if hasattr(self, 'root') and self.root and self.root.winfo_exists():
+                    self.root.after(0, after_download)
+            except Exception as e:
+                print(f"Warning: Could not schedule after_download callback: {e}")
 
         self.download_thread = threading.Thread(target=run_download, daemon=True)
         self.download_thread.start()
@@ -1542,25 +1760,14 @@ class InSARLiteApp:
                     self.dwn_dem.config(state="normal")
 
     def _setup_polarization_controls(self, dir_pol_summary=None, zip_pol_summary=None):
-        if dir_pol_summary and zip_pol_summary:
-            # Calculate total counts for comparison
-            dir_total = sum(dir_pol_summary.values()) if dir_pol_summary else 0
-            zip_total = sum(zip_pol_summary.values()) if zip_pol_summary else 0
-            
-            # If zip files are fewer than safe dirs, warn user and use safe dirs
-            if zip_total < dir_total:
-                from tkinter import messagebox
-                messagebox.showwarning(
-                    "Data Mismatch Warning",
-                    f"Found {dir_total} SAFE directories but only {zip_total} ZIP files.\n\n"
-                    f"This suggests potentially different datasets in the folder.\n"
-                    f"Using SAFE directories count for polarization labels.",
-                    icon="warning"
-                )
-                zip_pol_summary = None  # Use only dir_pol_summary
-            else:
-                # Use zip files (they are >= safe dirs)
-                dir_pol_summary = None  # Use only zip_pol_summary
+        # If SAFE directories exist (extracted data), always use their polarization summary
+        # This reflects the actual files available, not what's in unextracted ZIPs
+        if dir_pol_summary:
+            zip_pol_summary = None  # Ignore ZIP files when SAFE dirs exist
+        
+        if not dir_pol_summary and not zip_pol_summary:
+            # If we only have zip_pol_summary, use it
+            pass  # Continue with zip_pol_summary
                 
         row = self._get_row("data_folder") + 1
 
@@ -1870,10 +2077,12 @@ class InSARLiteApp:
         self.output_folder_entry.grid(row=0, column=1, padx=(0, 4), sticky="w")
         add_tooltip(self.output_folder_entry, "Path to output directory.\nProject folder will be created inside this directory.")
         
-        def on_browse_output():
+        def browse_output_folder():
             browse_folder(self.output_folder_entry, "output_folder")
+        
         self.output_folder_browse = tk.Button(
-            self.output_controls_frame, text="Browse", command=on_browse_output
+            self.output_controls_frame, text="Browse", 
+            command=browse_output_folder
         )
         self.output_folder_browse.grid(row=0, column=2, padx=(0, 8), sticky="w")
         add_tooltip(self.output_folder_browse, "Browse and select output directory")
@@ -2290,6 +2499,12 @@ class InSARLiteApp:
             self.gacos_btn.config(state="disabled")        
 
     def on_baselines_btn_click(self):
+        # Validate data.in files before opening Base2Net GUI
+        validation_passed = self._validate_data_in_files()
+        
+        if not validation_passed:
+            return  # User chose to abort or validation failed
+            
         # Create a new Toplevel window for BaselineGUI
         baseline_window = tk.Toplevel(self.root)
 
@@ -2310,6 +2525,77 @@ class InSARLiteApp:
 
         # Create BaselineGUI and pass the callback with log_file
         BaselineGUI(baseline_window, self.dem_path, self.paths, on_edges_exported=on_edges_exported, log_file=self.log_file)
+
+    def _validate_data_in_files(self):
+        """
+        Validate data.in files against TIFF and EOF files in each subswath.
+        
+        Returns:
+            bool: True if validation passes or user chooses to continue, False if user aborts
+        """
+        from .utils.utils import validate_data_in_vs_files
+        
+        validation_issues = []
+        
+        # Check each subswath directory
+        for key in ['pF1', 'pF2', 'pF3']:
+            if key not in self.paths:
+                continue
+                
+            subswath_path = self.paths[key]
+            if not os.path.exists(subswath_path):
+                continue
+                
+            praw = os.path.join(subswath_path, "raw")
+            
+            if not os.path.exists(praw):
+                validation_issues.append(f"Raw directory not found for {key}: {praw}")
+                continue
+                
+            # Validate this subswath's data.in file
+            validation = validate_data_in_vs_files(praw)
+            
+            if not validation['valid']:
+                issue_details = [f"Subswath {key}:"]
+                
+                if 'error' in validation:
+                    issue_details.append(f"  Error: {validation['error']}")
+                else:
+                    issue_details.append(f"  data.in entries: {validation['data_in_count']}")
+                    issue_details.append(f"  TIFF files found: {validation['tiff_count']}")
+                    issue_details.append(f"  EOF files found: {validation['eof_count']}")
+                    
+                    if validation['missing_tiff']:
+                        issue_details.append(f"  Missing TIFF files: {len(validation['missing_tiff'])}")
+                    if validation['missing_eof']:
+                        issue_details.append(f"  Missing EOF files: {len(validation['missing_eof'])}")
+                    if validation['extra_tiff']:
+                        issue_details.append(f"  Extra TIFF files: {len(validation['extra_tiff'])}")
+                    if validation['extra_eof']:
+                        issue_details.append(f"  Extra EOF files: {len(validation['extra_eof'])}")
+                
+                validation_issues.append("\n".join(issue_details))
+        
+        # If there are validation issues, show prompt
+        if validation_issues:
+            message = "⚠️  Data.in File Validation Issues Detected\n\n"
+            message += "\n\n".join(validation_issues)
+            message += "\n\nThis may indicate missing files or incomplete data extraction."
+            message += "\nDo you want to continue with baseline analysis anyway?"
+            
+            result = messagebox.askyesno(
+                "Data Validation Warning",
+                message,
+                icon='warning'
+            )
+            
+            if not result:
+                print("User aborted baseline analysis due to data validation issues")
+                return False
+            else:
+                print("User chose to continue despite validation issues")
+                
+        return True
 
     def _create_TS_steps_buttons(self):
         """Create buttons for TS steps after orbits download."""
@@ -2443,10 +2729,16 @@ class InSARLiteApp:
             
             for subswath in [self.pF1, self.pF2, self.pF3]:
                 if subswath and os.path.exists(subswath):
-                    if check_align_completion(subswath):
-                        print(f"Alignment completed successfully for {subswath}")
+                    raw_folder = os.path.join(subswath, "raw")
+                    if os.path.exists(raw_folder):
+                        status_info = check_alignment_completion_status(raw_folder)
+                        if status_info['status'] == 'complete':
+                            print(f"Alignment completed successfully for {subswath} ({status_info['aligned_images']}/{status_info['total_images']} images)")
+                        else:
+                            print(f"Alignment not completed successfully for {subswath} ({status_info['aligned_images']}/{status_info['total_images']} images)")
+                            return
                     else:
-                        print(f"Alignment not completed successfully for {subswath}")
+                        print(f"Raw folder not found for {subswath}")
                         return
                     if check_ifgs_completion(subswath):
                         print(f"IFG generation completed successfully for {subswath}")
@@ -2535,23 +2827,32 @@ class InSARLiteApp:
             self.sbas_window.lift()
             self.sbas_window.focus_force()
             return
+        
         # Use the same IFGs and ifgsroot as in unwrap
         ifgsroot = getattr(self, "ifgsroot", None)
         IFGs = getattr(self, "IFGs", [])
         gacosdir = getattr(self, "gacos_data_path", "")
-        self.sbas_window = tk.Toplevel(self.root)
-        SBASApp(self.sbas_window, self.paths, ifgsroot, IFGs, gacosdir, log_file=self.log_file)
         
-        # Wait until the window is destroyed, then set button states
-        self.sbas_window.wait_window()
-        
-        # Set 04_SBAS button to green and disabled
-        if hasattr(self, "inversion_btn") and self.inversion_btn.winfo_exists():
-            self.inversion_btn.config(state="disabled", bg="green", activebackground="green")
-        self.sbas_window.wait_window()
-        # Set 04_SBAS button to green and disabled
-        if hasattr(self, "inversion_btn") and self.inversion_btn.winfo_exists():
-            self.inversion_btn.config(state="disabled", bg="green", activebackground="green")
+        try:
+            self.sbas_window = tk.Toplevel(self.root)
+            SBASApp(self.sbas_window, self.paths, ifgsroot, IFGs, gacosdir, log_file=self.log_file)
+            
+            # Wait until the window is destroyed, then set button states
+            self.sbas_window.wait_window()
+            
+            # Set 04_SBAS button to green and disabled after window closes
+            if hasattr(self, "inversion_btn") and self.inversion_btn.winfo_exists():
+                self.inversion_btn.config(state="disabled", bg="green", activebackground="green")
+                
+        except Exception as e:
+            print(f"Error creating SBAS window: {e}")
+            # If error occurred, don't change button state
+            if hasattr(self, "sbas_window"):
+                try:
+                    self.sbas_window.destroy()
+                except:
+                    pass
+                delattr(self, "sbas_window")
 
     # def _handle_zip_files_found_with_query_option(self, folder, zip_files, zip_pol_summary):
     #     """
@@ -2719,7 +3020,7 @@ class InSARLiteApp:
         
         if result:
             # Disable controls during extraction
-            self._extract_btn.config(state="disabled", text="Preparing extraction...")
+            self._extract_btn.config(state="disabled", text="Extracting 1/...")
             self.data_folder_entry.config(state="disabled")
             
             # Start extraction in thread

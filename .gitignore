@@ -74,3 +74,27 @@ Thumbs.db
 dev_summaries/
 *_SUMMARY.md
 ENHANCED_PLOTTING_GUIDE.md
+
+# Development documentation (not for distribution)
+DOCUMENTATION_PLAN.md
+DOCUMENTATION_COMPLETE.md
+PYPI_SETUP.md
+RELEASE_GUIDE.md
+pypicommands.sh
+README_backup.md
+.Rhistory
+
+# Screenshot planning documents (development only)
+docs/source/_static/screenshots/README.md
+docs/source/_static/screenshots/CAPTURE_PLAN.md
+
+# Supplementary scripts (test and standalone scripts)
+supplementary_scripts/
+
+# Utility scripts in utils/ folder (not for distribution)
+src/insarlite/utils/batch_grd_counter.py
+src/insarlite/utils/compare_master_rankings.py
+src/insarlite/utils/generate_master_ranking_table.py
+src/insarlite/utils/grd_pixel_counter.py
+src/insarlite/utils/intf_pair_manager.py
+src/insarlite/utils/README_pixel_counter.md

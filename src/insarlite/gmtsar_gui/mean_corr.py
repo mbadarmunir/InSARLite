@@ -92,7 +92,7 @@ def create_mean_grd(ifgsroot, log_file_path):
     os.chdir(ifgsroot)
 
     list_file = [os.path.join(root, file) for root, _, files in os.walk(ifgsroot) for file in files if
-                 file.endswith('corr.grd')]
+                 file == 'corr.grd']
     scale = 1
     outmean = 'corr_stack.grd'
     outstd = 'std.grd'

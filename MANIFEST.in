@@ -1,0 +1,30 @@
+# Include essential files
+include README.md
+include LICENSE
+include pyproject.toml
+
+# Exclude development files
+exclude DOCUMENTATION_PLAN.md
+exclude DOCUMENTATION_COMPLETE.md
+exclude PYPI_SETUP.md
+exclude RELEASE_GUIDE.md
+exclude pypicommands.sh
+exclude README_backup.md
+exclude .Rhistory
+
+# Exclude development directories
+recursive-exclude dev_summaries *
+recursive-exclude supplementary_scripts *
+recursive-exclude .github *
+recursive-exclude docs *
+recursive-exclude .venv *
+recursive-exclude dist *
+recursive-exclude *.egg-info *
+
+# Exclude build artifacts
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude *.so
+global-exclude .DS_Store
+global-exclude *.swp
+global-exclude gmt.history

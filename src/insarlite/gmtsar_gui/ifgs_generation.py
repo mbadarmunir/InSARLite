@@ -42,7 +42,7 @@ def gen_ifgs(paths, mst, filter_wavelength, rng, az, ncores, console_text=None, 
         if dir_path and os.path.exists(dir_path):
 
             ind = os.path.join(dir_path, "intf.in")
-            fmst = 'S1_' + mst + f'_ALL_F{key[-1]}'
+            fmst = 'S1_' + mst.replace("-", "") + f'_ALL_F{key[-1]}'
             con = os.path.join(dir_path, "batch_tops.config")            
             os.chdir(dir_path)
             with open(con, 'r') as f:

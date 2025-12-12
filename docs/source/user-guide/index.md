@@ -1,92 +1,53 @@
 # User Guide
 
-Welcome to the comprehensive InSARLite User Guide! This guide covers all aspects of using InSARLite for Interferometric Synthetic Aperture Radar (InSAR) processing.
+Welcome to the InSARLite User Guide! This section provides reference documentation for understanding InSARLite's architecture and concepts.
 
-## Table of Contents
+## Available Documentation
 
 ```{toctree}
 :maxdepth: 2
 
 overview
 interface
+workflow
 data-management
-baseline-planning
-processing
-visualization
-troubleshooting
+case-study
+visualizer
 ```
 
-## What You'll Learn
+## Learn by Doing
 
-This user guide is organized to take you from basic concepts to advanced InSAR processing:
+**For step-by-step instructions**, we strongly recommend following the comprehensive:
 
-### 🏗️ [Project Overview](overview.md)
-- Understanding InSAR principles
-- InSARLite architecture and workflow
-- Key concepts and terminology
+### [🏔️ Turkey Landslide Case Study Tutorial](../tutorials/turkey-case-study.md)
 
-### 🖥️ [User Interface](interface.md)
-- Main application window
-- Navigation and controls
-- Settings and preferences
+This tutorial provides complete, screenshot-guided instructions for every aspect of InSAR processing with InSARLite:
 
-### 📊 [Data Management](data-management.md)
-- Setting up EarthData authentication
-- Searching and downloading Sentinel-1 data
-- Managing DEM data
-- Project organization
+- Installation and setup (8 screenshots)
+- Project configuration (14 screenshots)  
+- Baseline network design (9 screenshots)
+- Interferogram generation (3 screenshots)
+- Phase unwrapping (20 screenshots)
+- SBAS analysis (6 screenshots)
+- Results visualization (2 screenshots)
 
-### 🎯 [Baseline Planning](baseline-planning.md)
-- Understanding baseline networks
-- Interactive baseline plotting
-- Master scene selection
-- Network optimization
+**Processing real research data** (60 Sentinel-1 acquisitions), this tutorial demonstrates InSARLite's capabilities for detecting precursory deformation before catastrophic slope failures.
 
-### ⚙️ [Processing Workflows](processing.md)
-- Complete GMTSAR integration
-- Step-by-step processing guide
-- Parameter configuration
-- Quality control
+## Reference Documentation
 
-### 📈 [Visualization and Analysis](visualization.md)
-- Viewing interferograms
-- Time series analysis
-- Exporting results
-- Creating animations
+### [Overview](overview.md)
 
-### 🔧 [Troubleshooting](troubleshooting.md)
-- Common issues and solutions
-- Performance optimization
-- Error message guide
-- Getting help
+Conceptual architecture and design principles from the InSARLite research paper:
 
-## Quick Navigation
+- Platform requirements and installation
+- Four-step processing workflow
+- Network centrality algorithms
+- SBAS inversion methodology
+- Key innovations and modifications to GMTSAR workflow
 
-If you're looking for specific information:
+## Future Documentation
 
-- **First time user?** Start with [Project Overview](overview.md) and [Interface](interface.md)
-- **Need to download data?** Go to [Data Management](data-management.md)
-- **Ready to process?** See [Processing Workflows](processing.md)
-- **Having issues?** Check [Troubleshooting](troubleshooting.md)
-
-## Prerequisites
-
-Before diving into this guide, make sure you have:
-
-- ✅ InSARLite installed ([Installation Guide](../installation.md))
-- ✅ NASA EarthData account for data downloads
-- ✅ Basic understanding of InSAR concepts (recommended)
-- ✅ Sufficient disk space for your project area
-
-## Conventions Used
-
-Throughout this guide, we use the following conventions:
-
-```{note}
-**Blue boxes** contain helpful tips and additional information.
-```
-
-```{warning}
+Additional user guide sections covering specific topics (data management, baseline planning, unwrapping techniques, SBAS configuration, export formats, troubleshooting) will be added in future releases. For now, the Turkey tutorial provides comprehensive coverage of all these topics in context.
 **Orange boxes** highlight important warnings and potential pitfalls.
 ```
 
@@ -102,9 +63,8 @@ Throughout this guide, we use the following conventions:
 
 If you encounter issues while following this guide:
 
-1. Check the [Troubleshooting](troubleshooting.md) section
-2. Search existing [GitHub Issues](https://github.com/mbadarmunir/InSARLite/issues)
-3. Create a new issue with detailed information
-4. Join discussions in the [GitHub Discussions](https://github.com/mbadarmunir/InSARLite/discussions)
+1. Search existing [GitHub Issues](https://github.com/mbadarmunir/InSARLite/issues)
+2. Create a new issue with detailed information
+3. Join discussions in the [GitHub Discussions](https://github.com/mbadarmunir/InSARLite/discussions)
 
 Let's get started with your InSAR journey! 🚀

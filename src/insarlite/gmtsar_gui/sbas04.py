@@ -142,31 +142,59 @@ class SBASApp(tk.Frame):
                     disp_files.append(os.path.join(root, f))
 
         # Total count of disp_*.grd files
-        ndisp = len(disp_files)                
-        if nsce > 0 and inc_angle and sbas:
-            if nsce > 0 and ndisp > 0 and nsce == ndisp:
-                confirm = messagebox.askyesno("SBAS Confirmation", "SBAS seems to have already been completed. Redo the process?")
-                if confirm:
-                    self.sb_inversion(sdir, self.paths, inc_angle, atm, rms, dem, sbas, smooth)
-                else:
-                    print("Rerunning SBAS skipped.")
-            else:
-                self.sb_inversion(sdir, self.paths, inc_angle, atm, rms, dem, sbas, smooth)
+        ndisp = len(disp_files)
+        
+        # Validate required parameters first
+        if not inc_angle or inc_angle.strip() == "":
+            messagebox.showerror("Missing Parameters", "Please provide a valid incidence angle.")
+            return
+            
+        if not sbas:
+            messagebox.showerror("Missing Parameters", "Please select a valid SBAS mode.")
+            return
+        
+        # Always run sb_inversion which will handle sb_prep and create necessary files
+        # sb_prep creates scene.tab which is essential for SBAS processing
+        print("Calling sb_inversion to prepare and execute SBAS processing...")
+        self.sb_inversion(sdir, self.paths, inc_angle, atm, rms, dem, sbas, smooth)
+        sbas_executed = True
+        
+        # Check for visualization after SBAS execution
+        if sbas_executed:
+            self.check_and_enable_visualization()
+
+    def check_and_enable_visualization(self):
+        """Check if all required output files exist and enable visualization if so"""
+        disp_files = []
         disp_files_ll = []
-        # Regex pattern: disp_<7digits>_ll.grd
-        patternll = re.compile(r"^disp_\d{7}_ll\.grd$")
-        for root, _, files in os.walk(sdir):
+        nsce = 0
+        
+        # Count scene files
+        for root, _, files in os.walk(self.sdir):
             for f in files:
+                if f == "scene.tab":
+                    sce = os.path.join(root, f)
+                    with open(sce) as file:     
+                        nsce = sum(1 for line in file)
+                        
+        # Regex patterns for output files
+        pattern = re.compile(r"^disp_\d{7}\.grd$")
+        patternll = re.compile(r"^disp_\d{7}_ll\.grd$")
+        
+        for root, _, files in os.walk(self.sdir):
+            for f in files:
+                if pattern.match(f):
+                    disp_files.append(os.path.join(root, f))
                 if patternll.match(f):
                     disp_files_ll.append(os.path.join(root, f))
 
-        if len(disp_files_ll) == len(disp_files) and len(disp_files_ll) == nsce:
+        if len(disp_files_ll) == len(disp_files) and len(disp_files_ll) == nsce and nsce > 0:
             self.create_visualize()
-        # confirm2 = messagebox.askyesno("Confirm Projection", "Do you want to reproject SBAS results and generate Velocity KML file?")
-        # if confirm2:
-        #     projgrd(sdir)
-        #     velkml(sdir, True, self.paths)
-        #     messagebox.showinfo("Process Completed", "SBAS processing and KML generation completed.")
+        else:
+            messagebox.showwarning("Incomplete Results", 
+                                 "SBAS process may not have completed successfully. "
+                                 f"Expected {nsce} displacement files, found {len(disp_files)} regular and {len(disp_files_ll)} geographic projections.")
+
     def create_visualize(self):
         # Disable run button and set its background to green
         for child in self.winfo_children():
@@ -201,18 +229,41 @@ class SBASApp(tk.Frame):
                 else:
                     intfdir = os.path.join(dir_path, 'intf_all')
                 break
+        
+        # Determine unwrap file type
         uwp = 'unwrap.grd'
         for subfolder in os.listdir(intfdir):
             if os.path.exists(os.path.join(intfdir, subfolder, 'unwrap_GACOS_corrected_detrended.grd')):
                 uwp = 'unwrap_GACOS_corrected_detrended.grd'
+                break
+        else:
+            # If no GACOS corrected files, check for unwrap_pin vs unwrap
+            uwps = [os.path.join(root, f) for root, _, files in os.walk(intfdir) for f in files if f == 'unwrap.grd']
+            uwpn = [os.path.join(root, f) for root, _, files in os.walk(intfdir) for f in files if f == 'unwrap_pin.grd']
+            if len(uwps) == len(uwpn):
+                uwp = "unwrap_pin.grd"
             else:
-                uwps = [os.path.join(root, f) for root, _, files in os.walk(intfdir) for f in files if f == 'unwrap.grd']
-                uwpn = [os.path.join(root, f) for root, _, files in os.walk(intfdir) for f in files if f == 'unwrap_pin.grd']
-                if len(uwps) == len(uwpn):
-                    uwp = "unwrap_pin.grd"
-                else:
-                    uwp = "unwrap.grd"
+                uwp = "unwrap.grd"
+        
         print(f"Creating required files for sbas using uwp: {uwp}, intf.in: {intf}, btable: {btable}, intfdir: {intfdir}")
+        
+        # Check if output files already exist before running prep
+        existing_disp_files = []
+        pattern = re.compile(r"^disp_\d{7}\.grd$")
+        for root, _, files in os.walk(sdir):
+            for f in files:
+                if pattern.match(f):
+                    existing_disp_files.append(os.path.join(root, f))
+        
+        if len(existing_disp_files) > 0:
+            confirm = messagebox.askyesno("SBAS Confirmation", 
+                                        f"Found {len(existing_disp_files)} existing displacement files. "
+                                        "SBAS seems to have already been completed. Redo the process?")
+            if not confirm:
+                print("Rerunning SBAS skipped by user.")
+                return
+        
+        # Always run sb_prep to create/update intf.tab and scene.tab
         self.sb_prep(intf, btable, intfdir, uwp)
 
         if os.path.exists('intf.tab') and os.path.exists('scene.tab'):

@@ -240,6 +240,12 @@ class DataHandlers:
         try:
             safe_dirs, zip_files = get_safe_and_zip_files(folder)
             
+            # Show immediate progress with total count
+            def update_initial_progress():
+                if hasattr(app_instance, '_extract_btn') and app_instance._extract_btn and app_instance._extract_btn.winfo_exists():
+                    app_instance._extract_btn.config(text=f"Extracting 1/{len(zip_files)}")
+            app_instance.root.after(0, update_initial_progress)
+            
             def update_progress(current, total, skipped=False):
                 if skipped:
                     text = f"Processing {current}/{total} (skipped identical)"
@@ -258,6 +264,8 @@ class DataHandlers:
                 folder, 
                 selected_subswaths, 
                 selected_pol,
+                start_date=app_instance.start_var.get() if hasattr(app_instance, 'start_var') else None,
+                end_date=app_instance.end_var.get() if hasattr(app_instance, 'end_var') else None,
                 progress_callback=update_progress,
                 quick_comparison=True  # Use fast size+timestamp comparison
             )

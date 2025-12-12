@@ -35,165 +35,241 @@ InSAR is widely used for:
 
 ### Design Philosophy
 
-InSARLite is built on the principle of **accessibility without compromising capability**. It provides:
+InSARLite is built on the principle of **accessibility without compromising capability**. We have developed and tested InSARLite in Linux environments (Ubuntu 20.04 and 22.04) and released it as an open-source package via GitHub and PyPI.
 
-- **Intuitive GUI**: User-friendly interface for complex InSAR workflows
-- **GMTSAR Integration**: Full integration with the powerful GMTSAR processing engine
-- **Automated Workflows**: Streamlined processing with minimal manual intervention
-- **Interactive Tools**: Visual baseline planning and result analysis
-- **Extensible Design**: Modular architecture allowing for customization
-- **Automatic Dependency Management**: Self-installing system that handles GMTSAR setup automatically
+It primarily uses the Python `subprocess` module to orchestrate GMTSAR command-line programs and shell scripts for various processing steps, while replacing selected GMTSAR shell-script components with Python implementations to enhance efficiency and flexibility. For example, the application of Generic Atmospheric Correction Online Service (GACOS) corrections to unwrapped interferograms builds on the GMTSAR user-contributed shell script.
+
+For enhanced performance, we implemented parallel processing using a Python thread pool for several steps that involve repeated execution of similar operations, including GACOS atmospheric correction, interferogram generation, and phase unwrapping. This allows independent jobs to be dispatched concurrently, reducing total processing time for large stacks while preserving the underlying GMTSAR workflow.
 
 ```{note}
-**Platform Compatibility**: InSARLite is primarily developed and tested on Ubuntu Linux. For Windows users, WSL2 with Ubuntu provides the best experience. macOS and other Linux distributions have experimental support.
+**Platform Compatibility**: InSARLite has been developed and tested exclusively on **Ubuntu 20.04 and 22.04**. Other operating systems have not been tested and are not officially supported.
 ```
 
 ```{note}
-**Zero Configuration Setup**: InSARLite automatically detects and installs GMTSAR on first startup, requiring no manual dependency management from users.
+**NASA Earthdata Credentials**: InSARLite requires NASA Earthdata credentials to authenticate access to Alaska Satellite Facility (ASF) datasets. These credentials are requested only once and stored locally for automated retrieval in subsequent executions.
 ```
 
-### Core Components
+### Conceptual Structure
 
-```{mermaid}
-graph TD
-    A[Data Management] --> B[Baseline Planning]
-    B --> C[Image Processing]
-    C --> D[Interferogram Generation]
-    D --> E[Phase Unwrapping]
-    E --> F[Time Series Analysis]
-    F --> G[Visualization]
-    
-    A1[EarthData Authentication] --> A
-    A2[Sentinel-1 Download] --> A
-    A3[DEM Management] --> A
-    
-    B1[Interactive Plotting] --> B
-    B2[Master Selection] --> B
-    B3[Network Design] --> B
-    
-    C1[Orbit Processing] --> C
-    C2[Image Alignment] --> C
-    C3[Coregistration] --> C
-    
-    D1[Interferometry] --> D
-    D2[Coherence Calculation] --> D
-    D3[Filtering] --> D
-    
-    E1[Reference Point] --> E
-    E2[Mask Definition] --> E
-    E3[Unwrapping Algorithms] --> E
-    
-    F1[SBAS Processing] --> F
-    F2[Time Series Generation] --> F
-    F3[Velocity Calculation] --> F
-    
-    G1[Interactive Viewing] --> G
-    G2[Export Tools] --> G
-    G3[Animation Creation] --> G
+The conceptual structure of InSARLite is organized around **four main processing steps** that follow project configuration:
+
+![InSARLite Conceptual Architecture](../_static/images/conceptual/Figure-2.png)
+
+*The conceptual architecture illustrates four sequential processing steps following project configuration. Project configuration enables users to define input dataset paths (or download/extract data automatically), specify temporal and spatial parameters, select subswath(s) and SAR polarization, and set orbit direction—establishing the foundation for streamlined InSAR time-series analysis. Red-highlighted operations represent newly implemented functionalities within the traditional GMTSAR workflow, while blue-highlighted modifications support automation and transition from command-line to interactive graphical interface.*
+
+#### Project Configuration
+The project configuration step enables users to:
+- Define paths to input datasets or download/extract data automatically
+- Specify temporal period and spatial extent
+- Select subswath(s), SAR polarization, and orbit direction
+- Set up DEM (Digital Elevation Model) requirements
+- Configure output directories and project naming
+
+This foundation supports streamlined and automated InSAR time-series processing.
+
+#### Step 1: Baseline Network Selection (Base2Net)
+- Calculate temporal and perpendicular baselines for all image pairs
+- Visualize baseline-time relationships interactively
+- Select optimal master (reference) image
+- Define interferometric pairs based on baseline thresholds
+- Export network configuration for processing
+
+#### Step 2: Alignment and Interferogram Generation
+- Align secondary images to master reference
+- Generate interferograms for selected pairs
+- Merge multiple subswaths (if applicable)
+- Calculate mean correlation grids
+- Apply filtering and quality assessment
+
+#### Step 3: Phase Unwrapping
+- Define processing mask (correlation threshold and/or manual delineation)
+- Select reference point for phase normalization
+- Unwrap interferogram phase
+- Optionally apply atmospheric corrections (GACOS)
+- Validate unwrapping quality
+
+#### Step 4: SBAS Inversion and Time Series
+- Perform Small Baseline Subset (SBAS) inversion
+- Generate deformation time series
+- Calculate mean velocity maps
+- Apply optional spatio-temporal filtering
+- Visualize and export results
+
+```{note}
+**Newly Implemented Features**: Operations highlighted in red in Figure 2 represent newly implemented functionalities within the traditional GMTSAR workflow, including automated data download, interactive baseline planning, parallel processing, and integrated visualization tools.
 ```
 
-### Module Structure
-
-#### 1. **Main Application (`main.py`)**
-- Central GUI orchestrator
-- User interface management
-- Workflow coordination
-- Configuration handling
-
-#### 2. **Data Management Module**
-- **EarthData Authentication**: Secure credential management
-- **Data Downloads**: Automated Sentinel-1 acquisition
-- **DEM Handling**: Digital Elevation Model processing
-- **File Organization**: Structured project management
-
-#### 3. **GMTSAR GUI Modules**
-- **Baseline Planning**: Interactive network design
-- **Image Processing**: Alignment and coregistration
-- **Interferometry**: Interferogram generation
-- **Unwrapping**: Phase unwrapping and masking
-- **Time Series**: SBAS processing and analysis
-
-#### 4. **Utilities**
-- **Configuration Management**: Settings and preferences
-- **Authentication**: Secure API access
-- **Data Handlers**: File I/O operations
-- **Plotting Tools**: Matplotlib integration
-
-#### 5. **Visualization**
-- **Interactive Viewers**: Real-time data exploration
-- **Export Functions**: Publication-ready outputs
-- **Animation Tools**: Time series animations
+```{note}
+**Automation Enhancements**: Operations highlighted in blue in Figure 2 represent modifications that support automation and the transition from command-line interface to user-friendly interactive interface, such as GUI-based parameter selection, progress monitoring, and one-click execution of complex workflows.
+```
 
 ## Processing Workflow
 
-### Complete InSAR Processing Pipeline
+InSARLite implements a sequential workflow where controls relevant to the current stage remain active, while other controls are inactive or hidden, guiding users through the InSAR time-series analysis process.
 
-InSARLite implements a comprehensive 7-step processing workflow:
-
-#### Step 0: Project Setup
-1. **Authentication**: Configure EarthData credentials
-2. **Area Definition**: Define study area and time period
-3. **Data Search**: Query available Sentinel-1 acquisitions
-4. **Data Download**: Automated data acquisition
-5. **DEM Preparation**: Download and prepare elevation data
-
-#### Step 1: Data Preparation
-1. **File Organization**: Structure downloaded data
-2. **Metadata Extraction**: Parse Sentinel-1 metadata
-3. **Quality Assessment**: Verify data integrity
-4. **Subswath Selection**: Choose processing subswaths
-
-#### Step 2: Baseline Analysis and Network Design
-1. **Baseline Calculation**: Compute temporal and spatial baselines
-2. **Interactive Planning**: Visual network design
-3. **Master Selection**: Optimal reference scene selection
-4. **Pair Generation**: Create interferometric pairs
-
-#### Step 3: Orbit Processing
-1. **Orbit Download**: Acquire precise orbit files
-2. **Orbit Integration**: Apply orbital corrections
-3. **Geometric Correction**: Improve geolocation accuracy
-
-#### Step 4: Image Alignment and Interferometry
-1. **Coregistration**: Align slave images to master
-2. **Interferogram Formation**: Generate phase difference images
-3. **Coherence Calculation**: Assess interferometric quality
-4. **Filtering**: Reduce noise and improve quality
-
-#### Step 5: Phase Unwrapping
-1. **Mask Definition**: Define processing areas
-2. **Reference Point**: Set phase reference
-3. **Unwrapping**: Convert wrapped to continuous phase
-4. **Quality Control**: Validate unwrapping results
-
-#### Step 6: Time Series Analysis
-1. **SBAS Processing**: Small Baseline Subset analysis
-2. **Atmospheric Correction**: Remove atmospheric effects
-3. **Velocity Estimation**: Calculate deformation rates
-4. **Time Series Generation**: Create displacement time series
-
-#### Step 7: Visualization and Export
-1. **Interactive Viewing**: Explore results
-2. **Statistical Analysis**: Generate summary statistics
-3. **Export Functions**: Save results in various formats
-4. **Publication Tools**: Create figures and animations
-
-### Data Flow
-
-```{mermaid}
-flowchart LR
-    A[Sentinel-1 Data] --> B[Preprocessing]
-    B --> C[Alignment]
-    C --> D[Interferometry]
-    D --> E[Unwrapping]
-    E --> F[Time Series]
-    F --> G[Results]
-    
-    H[DEM Data] --> B
-    I[Orbit Files] --> C
-    J[Reference Point] --> E
-    K[Atmospheric Data] --> F
+```{note}
+**Button Color Coding**: Button controls are color-coded to indicate status:
+- **Default appearance**: Missing execution or parameter definition
+- **Green**: Ready for the corresponding action
+- **Orange**: Action has been partially completed
+- **Red**: Optional step has been intentionally skipped
 ```
+
+### Complete Processing Pipeline
+
+The InSARLite workflow consists of an initial **Project Configuration** step followed by **four main processing steps**:
+
+#### Project Configuration (Step 0)
+
+**Purpose**: Set up the project foundation before processing begins.
+
+1. **Spatial and Temporal Definition**
+   - Define study area extent (bounding box or AOI)
+   - Specify date range for Sentinel-1 acquisitions
+   - Select orbit direction (ascending/descending)
+
+2. **Data Management**
+   - Query available Sentinel-1 scenes from ASF
+   - Download selected data automatically
+   - Extract downloaded ZIP files
+   - Validate extracted SAFE directories
+
+3. **DEM Setup**
+   - Specify path to existing DEM file, or
+   - Automatically download SRTM DEM (30m or 90m resolution)
+
+4. **Output Configuration**
+   - Define output folder location
+   - Set project name
+   - Optionally configure GACOS atmospheric correction data
+
+5. **Confirmation**
+   - Review all configuration parameters
+   - Click "Confirm Configuration" to finalize setup
+   - Generate complete directory structure
+
+Once configuration is confirmed, the four main processing steps become accessible.
+
+#### Step 1: Baseline Network Selection (01_Base2Net)
+
+**Purpose**: Design the interferometric network by selecting master image and defining image pairs.
+
+1. **Baseline Calculation**
+   - Compute temporal and perpendicular baselines for all images
+   - Generate baseline_table.dat with centrality ranking
+   - Display baseline plot with time vs perpendicular baseline
+
+2. **Master Selection**
+   - Review network centrality rankings
+   - Select optimal master image (typically lowest average baseline)
+   - Confirm master selection
+
+3. **Network Design**
+   - Define temporal baseline threshold (e.g., 48 days)
+   - Define perpendicular baseline threshold (e.g., 250 meters)
+   - Generate and visualize interferometric pairs
+   - Optionally edit network (add/remove connections)
+
+4. **Export**
+   - Save baseline configuration
+   - Export interferometric network for processing
+
+**Key Outputs**: `baseline_table.dat`, `intf.in` (pair list), baseline plots
+
+#### Step 2: Alignment and Interferogram Generation (02_Align_Generate)
+
+**Purpose**: Align images and generate interferograms for all defined pairs.
+
+1. **Parameter Definition**
+   - Set range decimation factor
+   - Set azimuth decimation factor
+   - Define filter wavelength
+   - Specify number of processing cores
+
+2. **Processing Steps** (automated)
+   - Align secondary images to master reference
+   - Generate interferograms for all pairs
+   - Merge subswaths (if multiple selected)
+   - Calculate mean correlation grid
+   - Calculate correlation standard deviation
+
+3. **Progress Monitoring**
+   - Real-time process status updates
+   - Subswath-specific progress indicators
+   - Terminal output for detailed logging
+
+**Key Outputs**: Aligned images, interferograms, `corr_avg.grd`, `corr_std.grd`
+
+#### Step 3: Phase Unwrapping (03_Unwrap)
+
+**Purpose**: Unwrap interferogram phase and normalize to reference point.
+
+**Phase 1: Mask Definition (Optional)**
+1. Define processing mask using:
+   - Mean correlation threshold (e.g., 0.08)
+   - Manual polygon delineation, or
+   - Combination of both approaches
+2. Visualize and export mask
+
+**Phase 2: First Unwrapping**
+1. Set correlation threshold
+2. Specify number of processing cores
+3. Unwrap all interferograms (respecting mask if defined)
+
+**Phase 3: Reference Point Selection**
+1. Choose reference point method:
+   - Automated (highest mean correlation, lowest std deviation)
+   - Manual (interactive selection on map)
+2. Select using mean correlation map or validity count map
+3. Normalize all interferograms to reference point
+
+**Phase 4: Optional Atmospheric Correction**
+- Apply GACOS corrections (if configured)
+- Re-normalize interferograms
+
+**Key Outputs**: Unwrapped interferograms (`unwrap.grd`), phase files (`phase.grd`), mask file
+
+#### Step 4: SBAS Inversion and Visualization (04_SBAS)
+
+**Purpose**: Perform time-series inversion and visualize deformation results.
+
+1. **SBAS Configuration**
+   - Set incidence angle
+   - Define smoothing factor
+   - Select SBAS mode (standard or parallel)
+   - Configure optional outputs (RMS, DEM residual)
+   - Set atmospheric filtering iterations (if desired)
+
+2. **SBAS Processing** (automated)
+   - Perform Small Baseline Subset inversion
+   - Generate displacement time series
+   - Calculate mean velocity (VLOS)
+   - Apply optional spatio-temporal filtering
+
+3. **Visualization**
+   - Launch Surface Deformation Visualizer
+   - Reproject velocity from radar to geographic coordinates
+   - Generate velocity KML for Google Earth
+   - Display interactive velocity map
+
+4. **Interactive Analysis**
+   - Click any location to view time series
+   - Use Polygon Mode for multi-pixel analysis
+   - Export time series plots (PNG format)
+   - Export time series data (CSV format)
+
+**Key Outputs**: `disp_*.grd` (time series), `vel.grd` (mean velocity), KML files, time series plots
+
+### Data Flow Summary
+
+```
+Sentinel-1 SLC Data → Orbit Files → Alignment → Interferograms → 
+Unwrapping → SBAS Inversion → Deformation Time Series → Visualization
+            ↑                    ↑                ↑
+          DEM Data          Mask & Ref Pt    GACOS Data
+```
+
+For detailed step-by-step instructions with screenshots, see the [Turkey Case Study Tutorial](../tutorials/turkey-case-study.md).
 
 ## Key Features
 
@@ -280,5 +356,4 @@ Ready to start using InSARLite? Continue to:
 - [Quick Start Guide](../quickstart.md) - Complete your first project
 
 For technical details, see:
-- [API Reference](../api/index.md) - Detailed function documentation
 - [Developer Guide](../developer-guide/index.md) - Architecture and internals

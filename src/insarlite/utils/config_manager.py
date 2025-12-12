@@ -120,7 +120,7 @@ class ConfigManager:
     
     def save_config(self, config_data: Dict[str, Any]) -> bool:
         """
-        Save configuration to file.
+        Save configuration to file only if values have changed.
         
         Args:
             config_data: Configuration dictionary to save
@@ -135,7 +135,7 @@ class ConfigManager:
             # Ensure directory exists
             os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
             
-            # Load existing config and update with new data
+            # Load existing config
             existing_config = {}
             if os.path.exists(self.config_path):
                 try:
@@ -144,13 +144,39 @@ class ConfigManager:
                 except Exception:
                     existing_config = {}
             
-            existing_config.update(config_data)
+            # Check if any project config parameter has changed
+            project_params_changed = False
+            for key, new_val in config_data.items():
+                # Skip master-related keys for this check
+                if key in ['master_selection_cache', 'mst', 'align_mode', 'esd_mode']:
+                    continue
+                if existing_config.get(key) != new_val:
+                    project_params_changed = True
+                    break
             
-            with open(self.config_path, "w") as f:
-                json.dump(existing_config, f, indent=2)
-            
-            print(f"Saved config to {self.config_path}")
-            return True
+            # If any project parameter changed, update all project parameters and clear master data
+            if project_params_changed:
+                # Clear existing master-related data since project params changed
+                master_keys = ['master_selection_cache', 'mst', 'align_mode', 'esd_mode']
+                for master_key in master_keys:
+                    if master_key in existing_config:
+                        del existing_config[master_key]
+                
+                # Update project parameters (excluding master-related keys)
+                for key, val in config_data.items():
+                    if key not in master_keys:
+                        existing_config[key] = val
+                
+                # Write to file
+                with open(self.config_path, "w") as f:
+                    json.dump(existing_config, f, indent=2)
+                
+                print(f"Saved config to {self.config_path}")
+                print(f"⚠️  Project parameters changed - cleared master selection cache and alignment settings")
+                return True
+            else:
+                print(f"Project config unchanged, skipping save")
+                return False
             
         except Exception as e:
             print(f"Failed to save config: {e}")

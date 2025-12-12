@@ -48,11 +48,19 @@ MAX_RETRIES = 3
 RETRY_DELAY = 5  # seconds
 
 
-def download_or_copy_orbit(user_datadir, orb, d):
+def download_or_copy_orbit(user_datadir, orb, proc_dir):
     """
     Download or copy the orbit file if not available locally using unified EarthData authentication.
+    Creates symlinks in ALL F*/raw directories (F1/raw, F2/raw, F3/raw) where processing happens.
+    
+    Args:
+        user_datadir: Directory where orbit files are stored (e.g., /project/data)
+        orb: Orbit filename (e.g., S1A_OPER_AUX_POEORB_*.EOF)
+        proc_dir: Processing directory (e.g., /project/asc or /project/des)
     """
-    local_orbit_path = os.path.join(user_datadir, orb)    
+    local_orbit_path = os.path.join(user_datadir, orb)
+    
+    # Download orbit file if it doesn't exist
     if not os.path.exists(local_orbit_path):    
         download_url = url_root + orb
         print(f"Attempting to download {download_url}")
@@ -81,7 +89,7 @@ def download_or_copy_orbit(user_datadir, orb, d):
                             if chunk:
                                 f.write(chunk)
                     print(f"✓ Successfully downloaded {orb}")
-                    return
+                    break  # Exit retry loop on success
                 else:
                     print(f"⚠ Download failed with status code: {response.status_code}")
                     
@@ -98,10 +106,24 @@ def download_or_copy_orbit(user_datadir, orb, d):
                 raise e
     else:
         print(f"✓ Orbit file {orb} already exists locally")
-        # Create symlink if target doesn't exist
-        target_path = os.path.join(d, os.path.basename(local_orbit_path))
-        if not os.path.exists(target_path):
-            create_symlink(local_orbit_path, target_path)
+    
+    # 🛰️ CRITICAL: Create symlinks in ALL F*/raw directories where GMTSAR processing happens
+    # This ensures orbit files are accessible regardless of which subswath is being processed
+    f_dirs = [os.path.join(proc_dir, f"F{i}/raw") for i in [1, 2, 3]]
+    symlinks_created = 0
+    
+    for f_dir in f_dirs:
+        if os.path.exists(f_dir):
+            target_path = os.path.join(f_dir, os.path.basename(local_orbit_path))
+            if not os.path.exists(target_path):
+                try:
+                    create_symlink(local_orbit_path, target_path)
+                    symlinks_created += 1
+                except Exception as e:
+                    print(f"⚠️  Failed to create symlink in {f_dir}: {e}")
+    
+    if symlinks_created > 0:
+        print(f"✓ Created {symlinks_created} orbit symlink(s) in F*/raw directories")
 
 
 def process_files(user_datadir, proc_dir):
@@ -155,7 +177,7 @@ def process_files(user_datadir, proc_dir):
                             break
 
                     if orb:                
-                        download_or_copy_orbit(user_datadir, orb, d)                
+                        download_or_copy_orbit(user_datadir, orb, proc_dir)                
                         with open(data_in_file, 'a') as f:
                             f.write(f"{rec}:{orb}\n")
                     else:
@@ -182,7 +204,7 @@ def process_files(user_datadir, proc_dir):
                     break
 
             if orb:
-                download_or_copy_orbit(user_datadir, orb, d)                
+                download_or_copy_orbit(user_datadir, orb, proc_dir)                
                 with open(data_in_file, 'a') as f:
                     f.write(f"{rec}:{orb}\n")
 

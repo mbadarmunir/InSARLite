@@ -9,7 +9,7 @@ Email: mbadarmunir@gmail.com
 License: MIT
 """
 
-__version__ = "1.0.0"
+__version__ = "1.3.0"
 __author__ = "Muhammad Badar Munir"
 __email__ = "mbadarmunir@gmail.com"
 __license__ = "MIT"

@@ -30,7 +30,7 @@ class GrdViewer(tk.Toplevel):
         self.canvas = None
         self.toolbar = None
         self.threshold_var = tk.DoubleVar(self, value=0.1)
-        self.entry_thresh = tk.Entry(self, textvariable=self.threshold_var)
+        self.entry_thresh = None
         self._syncing = False
         self.mask_poly = None
         self.polygon_patch = None
@@ -38,13 +38,51 @@ class GrdViewer(tk.Toplevel):
         self.drawing_polygon = False
         self.filename = None
         self.grd_file = grd_file
-        self.create_widgets()
+        
+        # Set protocol BEFORE creating widgets
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
+        self.create_widgets()
+        
         if self.grd_file:
             self.load_grd_from_path(self.grd_file)
 
-    def on_closing(self):        
-        self.destroy()
+    def on_closing(self):
+        """Proper cleanup when window is closed."""
+        try:
+            # Disconnect matplotlib event handlers
+            if hasattr(self, 'cid_click'):
+                self.canvas.mpl_disconnect(self.cid_click)
+            if hasattr(self, 'cid_key'):
+                self.canvas.mpl_disconnect(self.cid_key)
+            
+            # Clean up matplotlib figures
+            if self.fig:
+                plt.close(self.fig)
+                self.fig = None
+            
+            # Clean up canvas and toolbar
+            if self.canvas:
+                self.canvas.get_tk_widget().destroy()
+                self.canvas = None
+            if self.toolbar:
+                self.toolbar.destroy()
+                self.toolbar = None
+                
+            # Clean up variables
+            self.threshold_var = None
+            self.entry_thresh = None
+            self.data = None
+            self.extent = None
+            self.ds = None
+            self.mask_poly = None
+            self.polygon_patch = None
+            self.polygon_coords = []
+            
+        except Exception as e:
+            print(f"Warning during cleanup: {e}")
+        finally:
+            self.destroy()
 
     def create_widgets(self):
         frm = ttk.Frame(self)
@@ -110,7 +148,13 @@ class GrdViewer(tk.Toplevel):
             data = ds.values.squeeze()
             x0, x1 = float(ds.x[0]), float(ds.x[-1])
             y0, y1 = float(ds.y[0]), float(ds.y[-1])
-            extent = [min(x0, x1), max(x0, x1), min(y0, y1), max(y0, y1)]
+            
+            print(f"Original coordinates: X: {x0} to {x1}, Y: {y0} to {y1}")
+            print("Keeping data in original array orientation - no coordinate transformations")
+            
+            # Keep data exactly as read - no flipping or coordinate changes
+            extent = [x0, x1, y0, y1]  # Use original coordinate order
+            print(f"Extent for display: {extent}")
             return data, extent, ds
         except Exception as e:
             messagebox.showerror("Error", f"Failed to read .grd file:\n{e}")
@@ -220,14 +264,14 @@ class GrdViewer(tk.Toplevel):
             return
 
         # Flip data and mask vertically for consistent display and export
-        data_plot = self.data #np.flipud(self.data)
-        mask_plot = mask #np.flipud(mask)
+        data_plot = self.data
+        mask_plot = mask
         extent_plot = self.extent
 
         self.fig, (self.ax1, self.ax2) = plt.subplots(1, 2, figsize=(14, 5), sharex=True, sharey=True)
 
         custom_cmap = self.get_custom_cmap()
-        im1 = self.ax1.imshow(data_plot, cmap=custom_cmap, vmin=0, vmax=1, origin='lower',
+        im1 = self.ax1.imshow(data_plot, cmap=custom_cmap, vmin=0, vmax=1, origin='upper',
                               aspect='auto', extent=extent_plot)
         cbar1 = self.fig.colorbar(im1, ax=self.ax1, orientation='vertical', fraction=0.046, pad=0.04)
         cbar1.set_label('correlation')
@@ -236,7 +280,7 @@ class GrdViewer(tk.Toplevel):
         cmap = ListedColormap(['white', 'red'])
         bounds = [-0.5, 0.5, 1.5]
         norm = BoundaryNorm(bounds, cmap.N)
-        self.ax2.imshow(mask_plot, cmap=cmap, norm=norm, origin='lower',
+        self.ax2.imshow(mask_plot, cmap=cmap, norm=norm, origin='upper',
                         aspect='auto', extent=extent_plot)
         legend_elements = [Patch(facecolor='red', edgecolor='k', label='Masked values')]
         self.ax2.legend(
@@ -333,12 +377,22 @@ class GrdViewer(tk.Toplevel):
             self._cancel_polygon()
 
     def _finish_polygon(self):
+        """Complete polygon drawing and clean up event handlers."""
         if self.polygon_patch:
             self.polygon_patch.remove()
         self.polygon_patch = Polygon(self.polygon_coords, closed=True, fill=False, edgecolor='cyan', linewidth=2)
         self.ax1.add_patch(self.polygon_patch)
         self.canvas.draw_idle()
         self.drawing_polygon = False
+        
+        # Disconnect event handlers
+        if hasattr(self, 'cid_click'):
+            self.canvas.mpl_disconnect(self.cid_click)
+            delattr(self, 'cid_click')
+        if hasattr(self, 'cid_key'):
+            self.canvas.mpl_disconnect(self.cid_key)
+            delattr(self, 'cid_key')
+        
         confirm = messagebox.askyesno("Polygon Mask", "Apply this polygon as additional mask?")
         if confirm:
             self._apply_polygon_mask()
@@ -349,59 +403,72 @@ class GrdViewer(tk.Toplevel):
             self.canvas.draw_idle()
 
     def _cancel_polygon(self):
+        """Cancel polygon drawing and clean up event handlers."""
         self.drawing_polygon = False
         self.polygon_coords = []
         if self.polygon_patch:
             self.polygon_patch.remove()
             self.polygon_patch = None
+        
+        # Disconnect event handlers
+        if hasattr(self, 'cid_click'):
+            self.canvas.mpl_disconnect(self.cid_click)
+            delattr(self, 'cid_click')
+        if hasattr(self, 'cid_key'):
+            self.canvas.mpl_disconnect(self.cid_key)
+            delattr(self, 'cid_key')
+            
         self.canvas.draw_idle()
 
     def _apply_polygon_mask(self):
+        """Convert drawn polygon to mask array."""
         poly = np.array(self.polygon_coords)
-        path = Path(poly)
-        ny, nx = self.data.shape
+        
+        # Transform polygon coordinates to match the coordinate system
+        # The display coordinates need to be flipped vertically to match the data array indexing
         x0, x1, y0, y1 = self.extent
+        poly_transformed = poly.copy()
+        # Flip y-coordinates: display_y -> array_y
+        poly_transformed[:, 1] = y1 - (poly[:, 1] - y0)
+        
+        path = Path(poly_transformed)
+        ny, nx = self.data.shape
         xs = np.linspace(x0, x1, nx)
         ys = np.linspace(y0, y1, ny)
         xv, yv = np.meshgrid(xs, ys)
         points = np.vstack((xv.flatten(), yv.flatten())).T
         inside = path.contains_points(points).reshape((ny, nx))
+        
         if self.mask_poly is None:
             self.mask_poly = np.zeros_like(self.data, dtype=np.uint8)
         self.mask_poly[inside] = 1
         self.plot_data()
 
     def save_mask_as_grd(self, ds_in, mask, grd_out):
-        # mask_arr = np.where(mask > 0, 1, np.nan).astype(np.float32)
-        # if "band" in ds_in.dims:
-        #     ds_in = ds_in.squeeze("band", drop=True)
-        # mask_da = xr.DataArray(
-        #     mask_arr,
-        #     dims=ds_in.dims,
-        #     coords={k: ds_in.coords[k] for k in ds_in.dims},
-        #     attrs=ds_in.attrs,
-        # )
-        # mask_da.to_netcdf(
-        #     grd_out,
-        #     engine="h5netcdf",
-        #     format="NETCDF4"
-        # )
-        # import rioxarray
-        # # import xarray as xr
-        # import numpy as np
-
+        """Save mask as .grd file with inverted logic and proper orientation."""
         
-
-        # Ensure mask_arr is written with correct x/y coordinates starting at 0
-        # Flip mask vertically for consistency with display and export
-        mask_arr = np.where(mask > 0, 1, np.nan).astype(np.float32)
+        print(f"Original dataset coordinates: X: {ds_in.x.values[0]} to {ds_in.x.values[-1]}, Y: {ds_in.y.values[0]} to {ds_in.y.values[-1]}")
+        print(f"Input mask shape: {mask.shape}")
+        
+        # Create mask array preserving original NaN values
+        # Where mask > 0: set to NaN (newly masked areas)
+        # Where mask == 0 AND original data is valid: set to 1 (good areas)  
+        # Where mask == 0 AND original data is NaN: keep NaN (preserve original NaN)
+        original_data = ds_in.values.squeeze()
+        mask_arr = np.where(mask > 0, 
+                           np.nan, 
+                           np.where(np.isnan(original_data), np.nan, 1)).astype(np.float32)
+        
+        # # Apply vertical flip for correct QGIS orientation
         # mask_arr = np.flipud(mask_arr)
-        # ny, nx = mask_arr.shape
-
-        # Get x/y from ds_in to ensure same registration as input (GMT gridline registration)
+        
+        # Use original coordinates exactly as they were in the input file
         x = ds_in.x.values
         y = ds_in.y.values
-
+        
+        print(f"Saving with original coordinates: X: {x[0]} to {x[-1]}, Y: {y[0]} to {y[-1]}")
+        
+        # Create DataArray with original coordinates
         mask_da = xr.DataArray(
             mask_arr,
             dims=("y", "x"),
@@ -414,9 +481,14 @@ class GrdViewer(tk.Toplevel):
         mask_da.to_netcdf(tmp_nc, engine="h5netcdf", format="NETCDF4")
 
         # Use GMT to convert to classic grd format
-        subprocess.run(["gmt", "grdconvert", tmp_nc, f"{grd_out}=nf"], check=True)
-
-        os.remove(tmp_nc)
+        try:
+            subprocess.run(["gmt", "grdconvert", tmp_nc, f"{grd_out}=nf"], check=True)
+            os.remove(tmp_nc)
+            print(f"✓ GMT .grd file saved: {grd_out}")
+        except subprocess.CalledProcessError as e:
+            print(f"Warning: GMT conversion failed: {e}")
+            print(f"Falling back to NetCDF format...")
+            os.rename(tmp_nc, grd_out.replace(".grd", ".nc"))
     def export_and_close(self):
         if self.data is None or self.extent is None or self.ds is None:
             messagebox.showerror("Error", "No data loaded to export.")
@@ -442,17 +514,8 @@ class GrdViewer(tk.Toplevel):
         # Export left plot (mean correlation)
         fig1, ax1 = plt.subplots(figsize=(7, 5))
         custom_cmap = self.get_custom_cmap()
-        im1 = ax1.imshow(self.data, cmap=custom_cmap, vmin=0, vmax=1, origin='lower',
-                         aspect='auto', extent=self.extent)
-        cbar1 = fig1.colorbar(im1, ax=ax1, orientation='vertical', fraction=0.046, pad=0.04)
-        cbar1.set_label('correlation')
-        ax1.set_title("Mean Correlation")
-        ax1.set_xlabel("Range")
-        # Export left plot (mean correlation) with vertically flipped data
-        fig1, ax1 = plt.subplots(figsize=(7, 5))
-        custom_cmap = self.get_custom_cmap()
-        data_plot = self.data #np.flipud(self.data)
-        im1 = ax1.imshow(data_plot, cmap=custom_cmap, vmin=0, vmax=1, origin='lower',
+        data_plot = self.data
+        im1 = ax1.imshow(data_plot, cmap=custom_cmap, vmin=0, vmax=1, origin='upper',
                          aspect='auto', extent=self.extent)
         cbar1 = fig1.colorbar(im1, ax=ax1, orientation='vertical', fraction=0.046, pad=0.04)
         cbar1.set_label('correlation')
@@ -468,7 +531,6 @@ class GrdViewer(tk.Toplevel):
             base_path1 = os.path.splitext(ps1)[0]
             
             # Configure matplotlib for vector output
-            import matplotlib.pyplot as plt
             original_rcParams = {
                 'pdf.fonttype': plt.rcParams.get('pdf.fonttype'),
                 'ps.fonttype': plt.rcParams.get('ps.fonttype'),
@@ -484,7 +546,7 @@ class GrdViewer(tk.Toplevel):
                 try:
                     vector_path = f"{base_path1}.{ext}"
                     fig1.savefig(vector_path, format=fmt, bbox_inches='tight', 
-                               facecolor='white', rasterized=False)
+                               facecolor='white')
                     print(f"Vector correlation plot ({fmt.upper()}) saved to {vector_path}")
                 except Exception as fmt_e:
                     print(f"Warning: Could not save {fmt.upper()} correlation plot: {fmt_e}")
@@ -498,13 +560,13 @@ class GrdViewer(tk.Toplevel):
             print(f"Warning: Could not save vector correlation plots: {e}")
         plt.close(fig1)
 
-        # Export middle plot (mask) with vertically flipped mask
+        # Export middle plot (mask)
         fig2, ax2 = plt.subplots(figsize=(7, 5))
         cmap = ListedColormap(['white', 'red'])
         bounds = [-0.5, 0.5, 1.5]
         norm = BoundaryNorm(bounds, cmap.N)
-        mask_plot = mask #np.flipud(mask)
-        ax2.imshow(mask_plot, cmap=cmap, norm=norm, origin='lower',
+        mask_plot = mask
+        ax2.imshow(mask_plot, cmap=cmap, norm=norm, origin='upper',
                    aspect='auto', extent=self.extent)
         legend_elements = [Patch(facecolor='red', edgecolor='k', label='Masked values')]
         ax2.legend(
@@ -527,7 +589,6 @@ class GrdViewer(tk.Toplevel):
             base_path2 = os.path.splitext(ps2)[0]
             
             # Configure matplotlib for vector output
-            import matplotlib.pyplot as plt
             original_rcParams = {
                 'pdf.fonttype': plt.rcParams.get('pdf.fonttype'),
                 'ps.fonttype': plt.rcParams.get('ps.fonttype'),
@@ -543,7 +604,7 @@ class GrdViewer(tk.Toplevel):
                 try:
                     vector_path = f"{base_path2}.{ext}"
                     fig2.savefig(vector_path, format=fmt, bbox_inches='tight', 
-                               facecolor='white', rasterized=False)
+                               facecolor='white')
                     print(f"Vector mask plot ({fmt.upper()}) saved to {vector_path}")
                 except Exception as fmt_e:
                     print(f"Warning: Could not save {fmt.upper()} mask plot: {fmt_e}")
@@ -588,6 +649,25 @@ class GrdViewer(tk.Toplevel):
             self.save_mask_as_grd(self.ds, mask, grd_out)
 
         messagebox.showinfo("Export", f"Exported:\n{png1} (+ .ps)\n{png2} (+ .ps)\n{grd_out}")
+        
+        # Proper cleanup before closing
+        try:
+            # Clean up matplotlib figures
+            plt.close('all')
+            
+            # Clean up variables to prevent cleanup issues
+            self.threshold_var = None
+            self.entry_thresh = None
+            self.data = None
+            self.extent = None
+            self.ds = None
+            self.mask_poly = None
+            self.polygon_patch = None
+            self.polygon_coords = []
+            
+        except Exception as e:
+            print(f"Warning during export cleanup: {e}")
+        
         self.on_closing()
 
 

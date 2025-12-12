@@ -3,6 +3,7 @@ import threading
 import tkinter as tk
 import numpy as np
 from tkinter import messagebox
+import shutil
 # from datetime import datetime, timedelta
 import json
 
@@ -47,14 +48,27 @@ class BaselineGUI:
         self.edit_mode_var = tk.BooleanVar(value=False)
         self.edit_graph_check = None
 
-        # Config file path
-        self.conf_path = os.path.join(os.path.expanduser('~'), ".config.json")
+        # Config file path - use project-specific config
+        self.conf_path = self._get_project_config_path()
         self.mst = None
 
         self._init_ui()
         self._check_previous_config()
 
     # --- Config Handling ---
+    def _get_project_config_path(self):
+        """Get project-specific config path from paths dictionary."""
+        if self.paths:
+            for key in ['pF1', 'pF2', 'pF3']:
+                path = self.paths.get(key)
+                if path:
+                    # Path is like /project/asc/F1, go up two levels to /project
+                    flight_dir = os.path.dirname(path)  # /project/asc
+                    project_root = os.path.dirname(flight_dir)  # /project
+                    return os.path.join(project_root, '.config.json')
+        # Fallback to home directory if paths not available
+        return os.path.join(os.path.expanduser('~'), ".config.json")
+    
     def _load_config(self):
         conf = {}
         if os.path.exists(self.conf_path):
@@ -66,70 +80,235 @@ class BaselineGUI:
         return conf
 
     def _save_config(self):
-        # Only update/append the relevant keys, preserving others
+        """Save alignment configuration only if changed."""
         conf = self._load_config()
-        updates = {
+        
+        # New values to save
+        new_values = {
             "mst": self.mst,
             "align_mode": self.align_mode_var.get(),
             "esd_mode": self.esd_mode_var.get()
         }
         
-        conf.update({k: v for k, v in updates.items() if v is not None})
+        # Check if any value has changed
+        changed = False
+        for key, new_val in new_values.items():
+            if new_val is not None and conf.get(key) != new_val:
+                changed = True
+                break
         
-        try:
-            with open(self.conf_path, "w") as f:
-                json.dump(conf, f, indent=2)
-        except Exception as e:
-            print(f"Could not save config: {e}")
+        # Only write if something changed
+        if changed:
+            conf.update({k: v for k, v in new_values.items() if v is not None})
+            try:
+                with open(self.conf_path, "w") as f:
+                    json.dump(conf, f, indent=2)
+                print(f"Updated alignment config: {', '.join(f'{k}={v}' for k, v in new_values.items() if v is not None)}")
+            except Exception as e:
+                print(f"Could not save config: {e}")
+        else:
+            print("Alignment config unchanged, skipping save")
 
     def _save_master_selection_cache(self, marray):
-        # Only update/append the master_selection_cache key        
+        """Save master selection cache only if changed."""
         conf = self._load_config()
+        
         # Convert array to JSON-serializable format
+        new_cache_data = None
         try:
             if isinstance(marray, np.ndarray):
-                conf["master_selection_cache"] = marray.tolist()
+                new_cache_data = marray.tolist()
             elif hasattr(marray, '__iter__'):
                 # Convert S1Product objects or other complex objects to simple lists
                 cache_data = []
                 for item in marray:
                     if hasattr(item, 'properties'):
-                        # S1Product object - extract key properties
+                        # S1Product object - extract key properties (ASF method - 4 elements)
                         cache_data.append([
                             float(item.properties.get('temporalBaseline', 0)),
                             float(item.properties.get('perpendicularBaseline', 0)),
                             str(item.properties.get('fileID', '')),
-                            int(item.properties.get('frameNumber', 0))
+                            0.0,  # No avg_baseline for ASF method
+                            int(item.properties.get('frameNumber', 0))  # rank
                         ])
-                    elif isinstance(item, (list, tuple)) and len(item) >= 4:
-                        # Already a list/tuple format
-                        cache_data.append(list(item))
+                    elif isinstance(item, (list, tuple, np.ndarray)) and len(item) >= 5:
+                        # Local method format: [temporal_bl, perpendicular_bl, image_id, avg_baseline, rank]
+                        cache_data.append([
+                            float(item[0]),
+                            float(item[1]),
+                            str(item[2]),
+                            float(item[3]),
+                            int(item[4])
+                        ])
+                    elif isinstance(item, (list, tuple, np.ndarray)) and len(item) >= 4:
+                        # Legacy format: [temporal_bl, perpendicular_bl, fileID, rank] - convert to 5 elements
+                        cache_data.append([
+                            float(item[0]),
+                            float(item[1]),
+                            str(item[2]),
+                            0.0,  # No avg_baseline
+                            int(item[3])
+                        ])
                     else:
                         # Convert other iterables to list
                         cache_data.append(list(item))
-                conf["master_selection_cache"] = cache_data
+                new_cache_data = cache_data
             else:
-                conf["master_selection_cache"] = marray
+                new_cache_data = marray
         except Exception as e:
             print(f"Could not convert master selection data for caching: {e}")
-            # Fallback: don't cache complex objects
-            conf["master_selection_cache"] = []
-            
+            new_cache_data = []
+        
+        # Check if cache data has changed
+        existing_cache = conf.get("master_selection_cache", [])
+        if existing_cache != new_cache_data:
+            conf["master_selection_cache"] = new_cache_data
+            try:
+                with open(self.conf_path, "w") as f:
+                    json.dump(conf, f, indent=2)
+                print(f"Updated master selection cache ({len(new_cache_data)} entries)")
+            except Exception as e:
+                print(f"Could not save master selection cache: {e}")
+        else:
+            print("Master selection cache unchanged, skipping save")
+    
+    def _save_removed_images(self, removed_dates):
+        """Save list of removed unconnected images to config and ask user about future handling."""
+        if not removed_dates:
+            return
+        
+        conf = self._load_config()
+        # Convert set to sorted list for consistent storage
+        removed_list = sorted(list(removed_dates))
+        
+        # Check if it changed
+        prev_removed = conf.get("removed_unconnected_images", [])
+        if removed_list == prev_removed:
+            return
+        
+        # Ask user how to handle removed images in future runs
+        from tkinter import messagebox
+        msg = (
+            f"🗑️  Removed {len(removed_list)} unconnected image(s) from network:\n"
+            f"{', '.join([f'{d[:4]}-{d[4:6]}-{d[6:8]}' for d in removed_list[:5]])}"
+            f"{'...' if len(removed_list) > 5 else ''}\n\n"
+            f"How should these be handled in future runs?\n\n"
+            f"• Yes: Ignore these images (don't count as 'missing' in baseline checks)\n"
+            f"  Recommended if you intentionally removed low-quality images\n\n"
+            f"• No: Treat as mismatch (trigger regeneration if files recreated)\n"
+            f"  Use this if you might re-download/add these images later"
+        )
+        
+        ignore_removed = messagebox.askyesno(
+            "Unconnected Images Removed",
+            msg,
+            icon="question"
+        )
+        
+        conf["removed_unconnected_images"] = removed_list
+        conf["ignore_removed_in_validation"] = ignore_removed
+        
         try:
             with open(self.conf_path, "w") as f:
                 json.dump(conf, f, indent=2)
+            action = "will be ignored" if ignore_removed else "will trigger mismatch"
+            print(f"✅ Saved {len(removed_list)} removed image(s) to config ({action} in future validations)")
         except Exception as e:
-            print(f"Could not save master selection cache: {e}")
+            print(f"Warning: Could not save removed images to config: {e}")
 
     def _load_master_selection_cache(self):
         conf = self._load_config()
         return conf.get("master_selection_cache", [])
+
+    def _get_current_ui_params(self):
+        """
+        Collect current UI parameter values for logging and config saving.
+        
+        Returns:
+            dict: Dictionary of current UI parameter values
+        """
+        ui_params = {
+            'alignment_mode': self.align_mode_var.get(),
+            'esd_mode': self.esd_mode_var.get(),
+        }
+        
+        # Add baseline constraints if available from plotter
+        if hasattr(self, 'plotter') and self.plotter:
+            try:
+                constraints = self.plotter.get_constraints()
+                ui_params.update({
+                    'perpendicular_baseline_constraint': constraints.get('perp_constraint'),
+                    'temporal_baseline_constraint': constraints.get('temp_constraint'),
+                })
+            except:
+                pass  # Plotter might not have constraints method yet
+        
+        # Add manual constraints from UI variables
+        try:
+            if self.perp_var.get():
+                ui_params['perpendicular_baseline_constraint'] = self.perp_var.get()
+            if self.temp_var.get():
+                ui_params['temporal_baseline_constraint'] = self.temp_var.get()
+        except:
+            pass
+            
+        # Add master selection if available
+        if hasattr(self, 'mst') and self.mst:
+            ui_params['master_image'] = self.mst
+            
+        # Add network information if available
+        if hasattr(self, 'edges') and self.edges:
+            ui_params['network_edges_count'] = len(self.edges)
+            
+        return ui_params
+
+    def _save_step_config(self, step_name, additional_params=None):
+        """
+        Save current step configuration to project config file.
+        
+        Args:
+            step_name (str): Name of the processing step
+            additional_params (dict): Additional parameters to save
+        """
+        try:
+            from ..utils.utils import save_config_to_json
+            
+            ui_params = self._get_current_ui_params()
+            
+            if additional_params:
+                ui_params.update(additional_params)
+            
+            # Save to project config file
+            if hasattr(self, 'paths') and self.paths:
+                # Try to find project config from paths
+                for key in ['pF1', 'pF2', 'pF3']:
+                    path = self.paths.get(key)
+                    if path:
+                        # Navigate up from F1/F2/F3 to project root (two levels)
+                        # Path is like /project/asc/F1, go up two levels to /project
+                        flight_dir = os.path.dirname(path)  # /project/asc
+                        project_root = os.path.dirname(flight_dir)  # /project
+                        config_path = os.path.join(project_root, '.config.json')
+                        save_config_to_json(config_path, ui_params, step_name)
+                        break
+                        
+        except Exception as e:
+            print(f"Warning: Could not save step configuration: {e}")
 
     def _check_previous_config(self):
         conf = self._load_config()
         prev_mst = conf.get("mst")
         prev_align = conf.get("align_mode")
         prev_esd = conf.get("esd_mode")
+        
+        # Store for later use
+        self._prev_mst = prev_mst
+        self._prev_align = prev_align
+        self._prev_esd = prev_esd
+        
+        # Check if SLC files exist and if alignment parameters have changed
+        slc_exists, alignment_changed = self._check_alignment_status(prev_align, prev_esd)
+        
         # Set self.pF1raw, self.pF2raw, self.pF3raw if present in self.paths
         valid_pfraw = True
         for key in ["pF1raw", "pF2raw", "pF3raw"]:
@@ -161,59 +340,329 @@ class BaselineGUI:
         print("additional check for master selection cache validity")
         ddata = self.paths.get("pdata")
         
+        # Get SAFE directories
         safe_dirs = [safe_dir.split('.SAFE')[0] for root, dirs, files in os.walk(ddata) for safe_dir in dirs if safe_dir.endswith(".SAFE")]
         marray = self._load_master_selection_cache()
         
         try:
-            # Handle both old and new cache formats
-            cache_imgs = []
+            # Handle both old and new cache formats - extract dates for comparison
+            cache_dates = []
             for item in marray:
                 if isinstance(item, (list, tuple)) and len(item) >= 3:
-                    # Extract the fileID and remove '-SLC' suffix
+                    # Extract the fileID (GMTSAR format: S1_YYYYMMDD_ALL_F*)
                     file_id = str(item[2])
-                    cache_imgs.append(file_id.split('-SLC')[0])
+                    # Extract date from GMTSAR format
+                    if '_' in file_id:
+                        parts = file_id.split('_')
+                        if len(parts) >= 2 and len(parts[1]) == 8:
+                            cache_dates.append(parts[1])  # YYYYMMDD
                 elif hasattr(item, 'properties'):
                     # S1Product object
                     file_id = str(item.properties.get('fileID', ''))
-                    cache_imgs.append(file_id.split('-SLC')[0])
+                    if '_' in file_id:
+                        parts = file_id.split('_')
+                        if len(parts) >= 2 and len(parts[1]) == 8:
+                            cache_dates.append(parts[1])  # YYYYMMDD
+            
+            # Extract dates from SAFE directories (format: S1A_IW_SLC__1SDV_YYYYMMDDTHHMMSS_...)
+            safe_dates = []
+            for safe_dir in safe_dirs:
+                if len(safe_dir) >= 25:
+                    date_str = safe_dir[17:25]  # YYYYMMDD
+                    safe_dates.append(date_str)
                     
-            cache_imgs_set = set(cache_imgs)
-            safe_dirs_set = set(safe_dirs)
+            cache_dates_set = set(cache_dates)
+            safe_dates_set = set(safe_dates)
         except Exception as e:
             print(f"Error processing master selection cache: {e}")
-            cache_imgs_set = set()
-            safe_dirs_set = set(safe_dirs)
+            cache_dates_set = set()
+            safe_dates_set = set(safe_dates) if safe_dirs else set()
             
+        # Check if master selection cache matches current SAFE directories
+        # Note: Image list may differ slightly (some added/removed) - this is OK
+        # What matters is whether master-related config (mst, align_mode, esd_mode) is valid
         if (
             not marray
-            or len(cache_imgs) != len(safe_dirs)
-            or cache_imgs_set != safe_dirs_set
+            or len(cache_dates) != len(safe_dates)
+            or cache_dates_set != safe_dates_set
         ):
             print("Master selection cache is invalid or does not match SAFE directories.")
+            print("ℹ️  This is expected if images were added/removed - will regenerate baselines.")
             valid_pfraw = False
 
+        # Store valid_pfraw for later use
+        self._valid_pfraw = valid_pfraw
+        
         # Additional check: prev_mst must match one of the SAFE directory dates
         if prev_mst:
+            # Extract dates from SAFE directories (format: YYYYMMDD)
             safe_dates = [safe_dir[17:25] for safe_dir in safe_dirs if len(safe_dir) >= 25]
-            if prev_mst not in safe_dates:
+            # Normalize prev_mst to YYYYMMDD format (remove dashes)
+            prev_mst_normalized = prev_mst.replace('-', '')
+            if prev_mst_normalized not in safe_dates:
                 print(f"Previous master {prev_mst} not found in SAFE directory dates.")
                 valid_pfraw = False
 
+        # Handle different scenarios based on SLC existence and parameter changes
         if prev_mst and prev_align and prev_esd and valid_pfraw:
-            print("Previous config found and all pfraw checks passed. Prompting user to use previous config.")
-            self._prompt_use_previous_config(prev_mst, prev_align, prev_esd)
+            if slc_exists and alignment_changed:
+                # SLC files exist but alignment parameters changed - need confirmation
+                print("SLC files exist but alignment parameters have changed. Prompting for confirmation.")
+                self._prompt_alignment_method_change(prev_mst, prev_align, prev_esd)
+                return
+            else:
+                print("Previous config found and all pfraw checks passed. Prompting user to use previous config.")
+                self._prompt_use_previous_config(prev_mst, prev_align, prev_esd)
+                return
+        elif prev_mst and prev_align and prev_esd and not valid_pfraw:
+            # Master config exists but image list has changed
+            print("Master config found but image list differs from cache.")
+            self._prompt_image_list_change(prev_mst, prev_align, prev_esd, cache_dates_set, safe_dates_set)
             return
         else:
+            # Master config incomplete or missing
             if not prev_mst:
                 print("No previous master (mst) found in config.")
             if not prev_align:
                 print("No previous align_mode found in config.")
             if not prev_esd:
                 print("No previous esd_mode found in config.")
-            if not valid_pfraw:
-                print("Images are different than saved in the config.")
+            
+            # Check if baseline files exist
+            baseline_files_exist = self._check_baseline_files_exist()
+            if baseline_files_exist:
+                print("Master configuration missing but baseline files exist.")
+                self._prompt_master_config_invalid(baseline_files_exist)
+                return
       
         # If not using previous config, proceed as normal
+
+    def _check_baseline_files_exist(self):
+        """Check if baseline LED/PRM files already exist."""
+        for key in ["pF1", "pF2", "pF3"]:
+            subswath_path = self.paths.get(key)
+            if subswath_path and os.path.exists(subswath_path):
+                raw_path = os.path.join(subswath_path, "raw")
+                if os.path.exists(raw_path):
+                    prm_files = [f for f in os.listdir(raw_path) if f.endswith(".PRM")]
+                    led_files = [f for f in os.listdir(raw_path) if f.endswith(".LED")]
+                    if len(prm_files) > 0 and len(led_files) > 0:
+                        return True
+        return False
+    
+    def _check_alignment_status(self, prev_align, prev_esd):
+        """Check if SLC files exist and if alignment parameters have changed."""
+        slc_exists = False
+        alignment_changed = False
+        
+        # Check if SLC files exist in any subswath
+        for key in ["pF1", "pF2", "pF3"]:
+            subswath_path = self.paths.get(key)
+            if subswath_path and os.path.exists(subswath_path):
+                raw_path = os.path.join(subswath_path, "raw")
+                if os.path.exists(raw_path):
+                    slc_files = [f for f in os.listdir(raw_path) if f.endswith('.SLC')]
+                    if len(slc_files) > 0:
+                        slc_exists = True
+                        break
+        
+        # Check if alignment parameters have changed
+        current_align = self.align_mode_var.get()
+        current_esd = self.esd_mode_var.get()
+        
+        if prev_align and prev_esd:
+            if current_align != prev_align or current_esd != prev_esd:
+                alignment_changed = True
+        
+        return slc_exists, alignment_changed
+
+    def _backup_existing_slc_files(self):
+        """Backup existing SLC files to 'previous_aligned' folder instead of deleting them."""
+        backup_created = False
+        
+        for key in ["pF1", "pF2", "pF3"]:
+            subswath_path = self.paths.get(key)
+            if subswath_path and os.path.exists(subswath_path):
+                raw_path = os.path.join(subswath_path, "raw")
+                if os.path.exists(raw_path):
+                    slc_files = [f for f in os.listdir(raw_path) if f.endswith('.SLC')]
+                    
+                    if len(slc_files) > 0:
+                        # Create backup directory
+                        backup_dir = os.path.join(raw_path, "previous_aligned")
+                        if not os.path.exists(backup_dir):
+                            os.makedirs(backup_dir)
+                        
+                        # Move SLC files to backup
+                        for slc_file in slc_files:
+                            src = os.path.join(raw_path, slc_file)
+                            dst = os.path.join(backup_dir, slc_file)
+                            try:
+                                shutil.move(src, dst)
+                                print(f"Backed up {slc_file} to previous_aligned folder")
+                            except Exception as e:
+                                print(f"Warning: Could not backup {slc_file}: {e}")
+                        
+                        backup_created = True
+        
+        if backup_created:
+            print("✅ Existing aligned SLC files have been backed up to 'previous_aligned' folders")
+        
+        return backup_created
+
+    def _prompt_master_config_invalid(self, baseline_files_exist):
+        """Prompt user when master configuration is missing/invalid but baseline files exist."""
+        from tkinter import messagebox
+        
+        msg = (
+            "Master configuration (mst, align_mode, esd_mode) is incomplete or missing.\n\n"
+            "However, baseline LED/PRM files were found in the project.\n\n"
+            "Do you want to:\n"
+            "• Yes: Regenerate baseline files (recommended if project parameters changed)\n"
+            "• No: Use existing baseline files and proceed to plotting"
+        )
+        
+        result = messagebox.askyesno(
+            "Master Configuration Invalid",
+            msg,
+            icon="warning"
+        )
+        
+        if result:
+            # User chose to regenerate - proceed with plotting which will regenerate
+            print("User chose to regenerate baseline files")
+            self._plot_baselines()
+        else:
+            # User chose to use existing files - proceed to plotting
+            print("User chose to use existing baseline files")
+            self._on_preprocess_done()
+    
+    def _prompt_image_list_change(self, prev_mst, prev_align, prev_esd, cache_dates_set, safe_dates_set):
+        """Prompt user when image list has changed from cached version."""
+        from tkinter import messagebox
+        
+        added = safe_dates_set - cache_dates_set
+        removed = cache_dates_set - safe_dates_set
+        
+        # Convert dates to readable format (YYYY-MM-DD)
+        def format_date(date_str):
+            """Convert YYYYMMDD to YYYY-MM-DD."""
+            if len(date_str) == 8:
+                return f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
+            return date_str
+        
+        change_details = ""
+        if added:
+            added_formatted = [format_date(d) for d in sorted(added)[:3]]
+            change_details += f"\nAdded images ({len(added)}): {', '.join(added_formatted)}{'...' if len(added) > 3 else ''}"
+        if removed:
+            removed_formatted = [format_date(d) for d in sorted(removed)[:3]]
+            change_details += f"\nRemoved images ({len(removed)}): {', '.join(removed_formatted)}{'...' if len(removed) > 3 else ''}"
+        
+        msg = (
+            f"Image list has changed since last baseline generation:\n"
+            f"Previous: {len(cache_dates_set)} images\n"
+            f"Current: {len(safe_dates_set)} images"
+            f"{change_details}\n\n"
+            "This is acceptable if you intentionally added/removed data.\n\n"
+            "Do you want to:\n"
+            "• Yes: Regenerate baseline files with current image list\n"
+            "• No: Use existing baseline files (may cause issues if images changed significantly)"
+        )
+        
+        result = messagebox.askyesno(
+            "Image List Changed",
+            msg,
+            icon="question"
+        )
+        
+        if result:
+            # User confirmed regeneration
+            print(f"User confirmed image list change - regenerating baselines")
+            self._plot_baselines()
+        else:
+            # User chose to use existing files
+            print("User chose to use existing baseline files despite image list change")
+            self._on_preprocess_done()
+    
+    def _prompt_alignment_method_change(self, prev_mst, prev_align, prev_esd):
+        """Prompt user when alignment method/mode has changed and SLC files exist."""
+        current_align = self.align_mode_var.get()
+        current_esd = self.esd_mode_var.get()
+        
+        def use_existing():
+            # Revert to previous settings and use existing alignment
+            self.align_mode_var.set(prev_align)
+            self.esd_mode_var.set(prev_esd)
+            self._update_ui_for_alignment_mode()
+            
+            if self.on_edges_exported:
+                self.on_edges_exported(prev_mst, prev_align, prev_esd)
+            self.root.destroy()
+
+        def backup_and_realign():
+            # Backup existing SLC files and proceed with new alignment
+            self._backup_existing_slc_files()
+            prompt.destroy()
+            # Continue with normal flow for new alignment - the alignment function 
+            # will automatically detect the method change and handle SLC protection
+
+        def cancel_operation():
+            # Close the baseline window and return to main interface
+            self.root.destroy()
+
+        prompt = tk.Toplevel(self.root)
+        prompt.title("Alignment Method Changed")
+        prompt.transient(self.root)
+        prompt.lift()
+        prompt.attributes('-topmost', True)
+        
+        # Create a more detailed message
+        changes = []
+        if current_align != prev_align:
+            changes.append(f"Alignment mode: {prev_align} → {current_align}")
+        if current_esd != prev_esd:
+            esd_modes = {"0": "average", "1": "median", "2": "interpolation"}
+            prev_esd_name = esd_modes.get(prev_esd, prev_esd)
+            current_esd_name = esd_modes.get(current_esd, current_esd)
+            changes.append(f"ESD mode: {prev_esd_name} → {current_esd_name}")
+        
+        msg = (
+            f"⚠️  Alignment Parameters Changed\n\n"
+            f"Existing aligned SLC files were found, but you have selected different alignment parameters:\n\n"
+            + "\n".join(f"• {change}" for change in changes) + "\n\n"
+            f"Re-alignment is required when using different parameters.\n"
+            f"Existing aligned images will NEVER be deleted.\n\n"
+            f"Options:\n"
+            f"• Use Existing: Keep current aligned images with previous settings\n"
+            f"• Backup & Re-align: Move existing images to 'previous_aligned' folder and re-align with new settings\n"
+            f"• Cancel: Return to main interface"
+        )
+        
+        tk.Label(prompt, text=msg, justify="left", wraplength=500).pack(padx=20, pady=10)
+        
+        btn_frame = tk.Frame(prompt)
+        btn_frame.pack(pady=(0, 10))
+        
+        tk.Button(btn_frame, text="Use Existing", width=15, bg="lightgreen", command=use_existing).pack(side=tk.LEFT, padx=5)
+        tk.Button(btn_frame, text="Backup & Re-align", width=15, bg="lightblue", command=backup_and_realign).pack(side=tk.LEFT, padx=5)
+        tk.Button(btn_frame, text="Cancel", width=15, bg="lightcoral", command=cancel_operation).pack(side=tk.LEFT, padx=5)
+
+        def center_window(win, parent):
+            win.update_idletasks()
+            x = parent.winfo_rootx() + (parent.winfo_width() - win.winfo_width()) // 2
+            y = parent.winfo_rooty() + (parent.winfo_height() - win.winfo_height()) // 2
+            win.geometry(f"+{x}+{y}")
+
+        prompt.after_idle(lambda: center_window(prompt, self.root))
+        prompt.grab_set()
+
+    def _update_ui_for_alignment_mode(self):
+        """Update UI elements when alignment mode is changed programmatically."""
+        if self.align_mode_var.get() == "esd":
+            self.show_esd_modes()
+        else:
+            self.hide_esd_modes()
 
     def _prompt_use_previous_config(self, prev_mst, prev_align, prev_esd):
         def use_previous():
@@ -323,9 +772,17 @@ class BaselineGUI:
             print("No paths provided.")
             return
             
-        # Log the start of actual baseline processing
+        # Collect UI parameters for logging
+        ui_params = self._get_current_ui_params()
+            
+        # Log the start of actual baseline processing with UI parameters
         if self.log_file:
-            process_logger(process_num=1, log_file=self.log_file, message="Starting baseline analysis and network design...", mode="start")
+            process_logger(process_num=1, log_file=self.log_file, 
+                         message="Starting baseline analysis and network design...", 
+                         mode="start", ui_params=ui_params)
+            
+        # Save configuration for this step
+        self._save_step_config("baseline_analysis")
             
         if self.plot_frame and self.plot_frame.winfo_exists():
             self.plot_frame.destroy()
@@ -336,7 +793,7 @@ class BaselineGUI:
             self.root.export_frame.destroy()
         run_threaded(
             self.root,
-            target=lambda: preprocess(self.paths, self.dem_path, self.align_mode_var.get(), self.esd_mode_var.get()),
+            target=lambda: preprocess(self.paths, self.dem_path, self.align_mode_var.get(), self.esd_mode_var.get(), force_regenerate=False),
             on_complete=self._on_preprocess_done
         )
 
@@ -427,7 +884,7 @@ class BaselineGUI:
         if hasattr(self, "plot_button"):
             self.plot_button.config(state=tk.DISABLED)
 
-        def task():
+        def task(use_fallback=False):
             ddata = self.paths.get("pdata")
             safe_dirs = [safe_dir.split('.SAFE')[0] for root, dirs, files in os.walk(ddata) for safe_dir in dirs if safe_dir.endswith(".SAFE")]
             marray = self._load_master_selection_cache()
@@ -459,46 +916,150 @@ class BaselineGUI:
                 or len(cache_imgs) != len(safe_dirs)
                 or cache_imgs_set != safe_dirs_set
             ):
-                for attempt in range(4):
+                # Need to perform master selection
+                attempt = 0
+                max_attempts = 10  # Allow user to retry up to 10 times
+                
+                while attempt < max_attempts:
                     try:
-                        marray = select_mst(ddata)
+                        marray = select_mst(ddata, use_fallback=use_fallback)
+                        # Success - save cache and break
+                        if len(marray) > 0:
+                            self._save_master_selection_cache(marray)
                         break
                     except Exception as e:
-                        print(f"Attempt {attempt+1} failed: {e}")
-                if len(marray) > 0:
-                    self._save_master_selection_cache(marray)
+                        attempt += 1
+                        print(f"Master selection attempt {attempt} failed: {e}")
+                        
+                        # Show user prompt for retry or fallback
+                        user_choice = self._prompt_asf_failure(str(e), attempt)
+                        
+                        if user_choice == "retry":
+                            continue  # Try again with same settings
+                        elif user_choice == "fallback":
+                            use_fallback = True
+                            continue  # Try again with fallback enabled
+                        else:  # cancel
+                            # User cancelled - re-enable buttons and exit
+                            self.root.after(0, self._on_select_master_done)
+                            return
+                
+                if attempt >= max_attempts:
+                    self.root.after(0, lambda: messagebox.showerror(
+                        "Error", 
+                        "Maximum retry attempts reached. Please check your EarthData credentials or use fallback method."
+                    ))
+                    self.root.after(0, self._on_select_master_done)
+                    return
+                    
             self.root.after(0, lambda: self._populate_master_listbox(marray))
             self.root.after(0, self._on_select_master_done)
 
         threading.Thread(target=task).start()
+    
+    def _prompt_asf_failure(self, error_msg, attempt_num):
+        """
+        Prompt user when ASF search fails, asking if they want to retry or use fallback.
+        Returns: "retry", "fallback", or "cancel"
+        """
+        result = {"choice": "cancel"}  # Default to cancel
+        
+        def on_retry():
+            result["choice"] = "retry"
+            prompt.destroy()
+        
+        def on_fallback():
+            result["choice"] = "fallback"
+            prompt.destroy()
+        
+        def on_cancel():
+            result["choice"] = "cancel"
+            prompt.destroy()
+        
+        # Create prompt on main thread
+        prompt = tk.Toplevel(self.root)
+        prompt.title("ASF Search Failed")
+        prompt.transient(self.root)
+        prompt.lift()
+        prompt.attributes('-topmost', True)
+        
+        msg = (
+            f"❌ ASF Search Authentication Failed (Attempt {attempt_num})\n\n"
+            f"Error: {error_msg}\n\n"
+            f"This usually means:\n"
+            f"• Your EarthData credentials may be incorrect or expired\n"
+            f"• Network connectivity issues\n"
+            f"• ASF service temporarily unavailable\n\n"
+            f"Options:\n"
+            f"• Try Again: Re-attempt ASF search with EarthData authentication\n"
+            f"• Use Fallback: Calculate baselines from local files only (no ASF metadata)\n"
+            f"• Cancel: Return to previous step\n\n"
+            f"Note: Fallback method uses only local SAFE directory information\n"
+            f"and may have limited baseline accuracy."
+        )
+        
+        tk.Label(prompt, text=msg, justify="left", wraplength=500).pack(padx=20, pady=10)
+        
+        btn_frame = tk.Frame(prompt)
+        btn_frame.pack(pady=(0, 10))
+        
+        tk.Button(btn_frame, text="Try Again", width=12, bg="lightblue", command=on_retry).pack(side=tk.LEFT, padx=5)
+        tk.Button(btn_frame, text="Use Fallback", width=12, bg="lightyellow", command=on_fallback).pack(side=tk.LEFT, padx=5)
+        tk.Button(btn_frame, text="Cancel", width=12, bg="lightcoral", command=on_cancel).pack(side=tk.LEFT, padx=5)
+
+        def center_window(win, parent):
+            win.update_idletasks()
+            x = parent.winfo_rootx() + (parent.winfo_width() - win.winfo_width()) // 2
+            y = parent.winfo_rooty() + (parent.winfo_height() - win.winfo_height()) // 2
+            win.geometry(f"+{x}+{y}")
+
+        prompt.after_idle(lambda: center_window(prompt, self.root))
+        
+        # Wait for user to make a choice
+        prompt.wait_window()
+        
+        return result["choice"]
 
     def _populate_master_listbox(self, array):
         # Handle both S1Product objects and simple arrays
         processed_array = []
         for item in array:
             if hasattr(item, 'properties'):
-                # S1Product object - extract properties
+                # S1Product object - extract properties (ASF method)
+                # Format: [temporal_bl, perpendicular_bl, fileID, rank]
+                file_id = str(item.properties.get('fileID', ''))
                 processed_array.append([
                     float(item.properties.get('temporalBaseline', 0)),
                     float(item.properties.get('perpendicularBaseline', 0)),
-                    str(item.properties.get('fileID', '')),
-                    int(item.properties.get('frameNumber', 0))
+                    file_id,
+                    0.0,  # No avg_baseline for ASF method
+                    int(item.properties.get('frameNumber', 0))  # This becomes rank position
                 ])
-            elif isinstance(item, (list, tuple, np.ndarray)) and len(item) >= 4:
-                # Already in array format
+            elif isinstance(item, (list, tuple, np.ndarray)) and len(item) >= 5:
+                # Local baseline method format: [temporal_bl, perpendicular_bl, image_id, avg_total_bl, rank]
                 processed_array.append([
                     float(item[0]) if item[0] is not None else 0.0,
                     float(item[1]) if item[1] is not None else 0.0,
                     str(item[2]) if item[2] is not None else '',
+                    float(item[3]) if item[3] is not None else 0.0,  # avg_baseline
+                    int(item[4]) if item[4] is not None else 0  # rank
+                ])
+            elif isinstance(item, (list, tuple, np.ndarray)) and len(item) >= 4:
+                # Legacy format: [temporal_bl, perpendicular_bl, fileID, rank]
+                processed_array.append([
+                    float(item[0]) if item[0] is not None else 0.0,
+                    float(item[1]) if item[1] is not None else 0.0,
+                    str(item[2]) if item[2] is not None else '',
+                    0.0,  # No avg_baseline
                     int(item[3]) if item[3] is not None else 0
                 ])
             else:
                 print(f"Warning: Unexpected item format in master array: {type(item)}")
                 continue
         
-        # Sort by rank (index 3)
+        # Sort by rank (index 4)
         try:
-            processed_array = sorted(processed_array, key=lambda x: int(x[3]))
+            processed_array = sorted(processed_array, key=lambda x: int(x[4]))
         except (ValueError, TypeError, IndexError) as e:
             print(f"Warning: Could not sort master array by rank: {e}")
             # Continue without sorting
@@ -510,36 +1071,85 @@ class BaselineGUI:
         self.dropdown_frame = tk.Frame(self.root.master_frame)
         self.dropdown_frame.pack(side=tk.LEFT, padx=10)
 
+        # Determine if we have avg_baseline data (local method)
+        has_avg_baseline = any(row[3] != 0.0 for row in processed_array)
+        
         header = tk.Frame(self.dropdown_frame)
         header.pack(side=tk.TOP, fill=tk.X)
-        for idx, text in enumerate(["Rank", "Date", "Btemp (days)", "Bperp (m)"]):
-            tk.Label(header, text=text, width=12, anchor="w", font=("Arial", 10, "bold")).grid(row=0, column=idx, sticky="w")
+        
+        # Column headers
+        if has_avg_baseline:
+            headers = ["Rank", "Date", "Btemp (days)", "Bperp (m)", "Avg BL"]
+            widths = [6, 12, 13, 12, 12]
+        else:
+            headers = ["Rank", "Date", "Btemp (days)", "Bperp (m)"]
+            widths = [6, 12, 13, 12]
+        
+        for idx, (text, width) in enumerate(zip(headers, widths)):
+            tk.Label(header, text=text, width=width, anchor="w", font=("Arial", 10, "bold")).grid(row=0, column=idx, sticky="w")
 
         listbox_frame = tk.Frame(self.dropdown_frame)
         listbox_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        self.master_listbox = tk.Listbox(listbox_frame, height=3, width=48, exportselection=False, font=("Courier New", 10))
+        
+        # Adjust listbox width based on columns
+        listbox_width = 55 if has_avg_baseline else 48
+        self.master_listbox = tk.Listbox(listbox_frame, height=3, width=listbox_width, exportselection=False, font=("Courier New", 10))
         self.master_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar = tk.Scrollbar(listbox_frame, orient=tk.VERTICAL, command=self.master_listbox.yview)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.master_listbox.config(yscrollcommand=scrollbar.set)
 
-        columns_map = [3, 2, 0, 1]  # [rank, fileID, temporal_baseline, perpendicular_baseline]
         self._listbox_dates = []
         for row_data in processed_array:
             try:
-                # Extract date from fileID (position 17:25)
-                file_id = str(row_data[columns_map[1]])
-                date_str = file_id[17:25] if len(file_id) > 25 else file_id[:8]
+                # row_data format: [temporal_bl, perpendicular_bl, file_id, avg_baseline, rank]
+                file_id = str(row_data[2])
+                rank = int(row_data[4])
+                temporal_bl = int(row_data[0])  # Convert to int
+                perpendicular_bl = float(row_data[1])
+                avg_baseline = float(row_data[3])
                 
-                row_text = "{:<8} {:<12} {:<12} {:<12}".format(
-                    str(row_data[columns_map[0]]),  # rank
-                    date_str,                        # date
-                    str(row_data[columns_map[2]]),   # temporal baseline
-                    str(row_data[columns_map[3]])    # perpendicular baseline
-                )
+                # Extract and format date from file_id
+                # Format: S1_20170319_ALL_F1 -> 2017-03-19
+                date_str = None
+                if '_' in file_id:
+                    # Try to find 8-digit date pattern (YYYYMMDD)
+                    parts = file_id.split('_')
+                    for part in parts:
+                        if len(part) == 8 and part.isdigit():
+                            # Found date: YYYYMMDD -> YYYY-MM-DD
+                            date_str = f"{part[0:4]}-{part[4:6]}-{part[6:8]}"
+                            break
+                
+                # Fallback: try extracting from position 17:25 (old logic)
+                if not date_str and len(file_id) > 25:
+                    date_part = file_id[17:25]
+                    if date_part.isdigit():
+                        date_str = f"{date_part[0:4]}-{date_part[4:6]}-{date_part[6:8]}"
+                
+                # Final fallback: try first 8 characters
+                if not date_str and len(file_id) >= 8:
+                    date_part = file_id[:8]
+                    if date_part.isdigit():
+                        date_str = f"{date_part[0:4]}-{date_part[4:6]}-{date_part[6:8]}"
+                
+                # Last resort: use file_id as is
+                if not date_str:
+                    date_str = file_id[:12]  # Truncate if too long
+                
+                # Format the row
+                if has_avg_baseline:
+                    row_text = f"{rank:<6} {date_str:<12} {temporal_bl:<13} {perpendicular_bl:<12.2f} {avg_baseline:<12.2f}"
+                else:
+                    row_text = f"{rank:<6} {date_str:<12} {temporal_bl:<13} {perpendicular_bl:<12.2f}"
+                
                 self.master_listbox.insert(tk.END, row_text)
-                self._listbox_dates.append(date_str)
-            except (IndexError, TypeError) as e:
+                
+                # Store date in YYYYMMDD format for point highlighting
+                date_yyyymmdd = date_str.replace('-', '')
+                self._listbox_dates.append(date_yyyymmdd)
+                
+            except (IndexError, TypeError, ValueError) as e:
                 print(f"Warning: Could not process row data {row_data}: {e}")
                 continue
 
@@ -856,6 +1466,16 @@ class BaselineGUI:
             and self.esd_mode_var.get() == prev_esd
             and os.path.exists(os.path.join(primary_dir, "intf.in"))
         ):
+            # Using previous config - still need to check for unconnected images
+            intf_path = os.path.join(primary_dir, "intf.in")
+            raw_dir = os.path.join(primary_dir, "raw")
+            data_in_path = os.path.join(raw_dir, "data.in")
+            if os.path.exists(data_in_path) and os.path.exists(intf_path):
+                from ..gmtsar_gui.pair_generation import remove_unconnected_images
+                removed_dates = remove_unconnected_images(intf_path, data_in_path)
+                if removed_dates:
+                    self._save_removed_images(removed_dates)
+            
             # Only call callback and close, skip writing intf.in (plot already saved above)
             if self.on_edges_exported:
                 self.on_edges_exported(self.mst, self.align_mode_var.get(), self.esd_mode_var.get())
@@ -878,6 +1498,16 @@ class BaselineGUI:
                 f.write(pair + "\n")
         print(f"Edge list saved to {intf_path}")
         
+        # Remove unconnected images from data.in and clean up symlinks
+        from ..gmtsar_gui.pair_generation import remove_unconnected_images
+        raw_dir = os.path.join(primary_dir, "raw")
+        data_in_path = os.path.join(raw_dir, "data.in")
+        removed_dates = set()
+        if os.path.exists(data_in_path):
+            removed_dates = remove_unconnected_images(intf_path, data_in_path)
+            if removed_dates:
+                self._save_removed_images(removed_dates)
+        
         # Save the matplotlib plot (already called above, but call again in case primary_dir changed)
         self._save_baseline_plot(primary_dir)
             
@@ -893,7 +1523,8 @@ class BaselineGUI:
         )
         messagebox.showinfo("Export Complete", stats_message)
 
-        # Copy to other subswaths
+        # Copy to other subswaths and clean up unconnected images
+        from ..gmtsar_gui.pair_generation import remove_unconnected_images
         primary_key = edge_list[0][-2:] if edge_list else ""
         for key in ["pF1", "pF2", "pF3"]:
             dir_path = self.paths.get(key)
@@ -901,6 +1532,13 @@ class BaselineGUI:
                 try:
                     shutil.copy2(intf_path, dir_path)
                     print(f"Copied intf.in to {dir_path}")
+                    
+                    # Also remove unconnected images for this subswath
+                    subswath_intf = os.path.join(dir_path, "intf.in")
+                    subswath_raw = os.path.join(dir_path, "raw")
+                    subswath_data_in = os.path.join(subswath_raw, "data.in")
+                    if os.path.exists(subswath_data_in):
+                        remove_unconnected_images(subswath_intf, subswath_data_in)
                 except Exception as e:
                     print(f"Warning: Could not copy to {dir_path}: {e}")
 

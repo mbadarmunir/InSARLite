@@ -7,9 +7,60 @@ import os
 import tkinter as tk
 import datetime
 from tkintermapview import TkinterMapView
-from tkcalendar import DateEntry
 from ..utils.utils import add_tooltip, browse_folder, browse_file
 from .gui_helpers import validate_float
+
+# WSL detection for calendar widget compatibility
+def is_wsl_or_problematic_env():
+    """Detect if running in WSL where calendar popups might not work properly"""
+    # Check for WSL-specific environment variables
+    wsl_env_vars = ['WSL_DISTRO_NAME', 'WSL_INTEROP', 'WSLENV']
+    if any(os.environ.get(var) for var in wsl_env_vars):
+        return True
+    
+    # Check /proc/version for Microsoft/WSL indicators
+    try:
+        with open('/proc/version', 'r') as f:
+            version = f.read().lower()
+            if 'microsoft' in version or 'wsl' in version:
+                return True
+    except:
+        pass
+    
+    return False
+
+# Conditional import of DateEntry
+USE_CALENDAR_WIDGET = not is_wsl_or_problematic_env()
+
+if USE_CALENDAR_WIDGET:
+    try:
+        from tkcalendar import DateEntry
+    except ImportError:
+        USE_CALENDAR_WIDGET = False
+        print("Warning: tkcalendar not available, using text entry fields for dates")
+
+if not USE_CALENDAR_WIDGET:
+    print("Using text entry fields for dates (calendar widgets disabled for compatibility)")
+    # Create a fallback DateEntry-like class
+    class DateEntry(tk.Entry):
+        def __init__(self, parent, textvariable=None, date_pattern='yyyy-mm-dd', **kwargs):
+            # Remove calendar-specific kwargs that Entry doesn't understand
+            kwargs.pop('background', None)
+            kwargs.pop('foreground', None) 
+            kwargs.pop('borderwidth', None)
+            kwargs.pop('validate', None)
+            super().__init__(parent, textvariable=textvariable, **kwargs)
+            self.date_pattern = date_pattern
+            
+        def set_date(self, date_obj):
+            """Set date using date object"""
+            if hasattr(date_obj, 'strftime'):
+                self.delete(0, tk.END)
+                self.insert(0, date_obj.strftime('%Y-%m-%d'))
+        
+        def get_date(self):
+            """Get date as string"""
+            return self.get()
 
 
 class UIFactory:
@@ -74,19 +125,32 @@ class UIFactory:
         add_tooltip(start_label, "Start date for data acquisition period\nFormat: YYYY-MM-DD")
         
         start_var = tk.StringVar()
-        start_date = DateEntry(
-            date_frame,
-            textvariable=start_var,
-            width=12,
-            background='darkblue',
-            foreground='white',
-            borderwidth=2,
-            date_pattern='yyyy-mm-dd',
-            validate="none"  # Don't validate on every keystroke
-        )
+        
+        if USE_CALENDAR_WIDGET:
+            # Use DateEntry with calendar popup
+            start_date = DateEntry(
+                date_frame,
+                textvariable=start_var,
+                width=12,
+                background='darkblue',
+                foreground='white',
+                borderwidth=2,
+                date_pattern='yyyy-mm-dd',
+                validate="none"  # Don't validate on every keystroke
+            )
+            add_tooltip(start_date, "Click to open calendar picker\nOr type date in YYYY-MM-DD format")
+        else:
+            # Use simple text entry
+            start_date = DateEntry(
+                date_frame,
+                textvariable=start_var,
+                width=12,
+                date_pattern='yyyy-mm-dd'
+            )
+            add_tooltip(start_date, "Enter date in YYYY-MM-DD format")
+            
         start_date.grid(row=0, column=1, sticky="w", padx=(0, 10))
         start_date.set_date(default_start)
-        add_tooltip(start_date, "Click to open calendar picker\nOr type date in YYYY-MM-DD format")
         
         # End date
         end_label = tk.Label(date_frame, text="End Date:")
@@ -94,19 +158,32 @@ class UIFactory:
         add_tooltip(end_label, "End date for data acquisition period\nFormat: YYYY-MM-DD")
         
         end_var = tk.StringVar()
-        end_date = DateEntry(
-            date_frame,
-            textvariable=end_var,
-            width=12,
-            background='darkblue',
-            foreground='white',
-            borderwidth=2,
-            date_pattern='yyyy-mm-dd',
-            validate="none"  # Don't validate on every keystroke
-        )
+        
+        if USE_CALENDAR_WIDGET:
+            # Use DateEntry with calendar popup
+            end_date = DateEntry(
+                date_frame,
+                textvariable=end_var,
+                width=12,
+                background='darkblue',
+                foreground='white',
+                borderwidth=2,
+                date_pattern='yyyy-mm-dd',
+                validate="none"  # Don't validate on every keystroke
+            )
+            add_tooltip(end_date, "Click to open calendar picker\nOr type date in YYYY-MM-DD format")
+        else:
+            # Use simple text entry
+            end_date = DateEntry(
+                date_frame,
+                textvariable=end_var,
+                width=12,
+                date_pattern='yyyy-mm-dd'
+            )
+            add_tooltip(end_date, "Enter date in YYYY-MM-DD format")
+        
         end_date.grid(row=0, column=5, sticky="w")
         end_date.set_date(today)
-        add_tooltip(end_date, "Click to open calendar picker\nOr type date in YYYY-MM-DD format")
         
         return date_frame, start_var, end_var, start_date, end_date
 

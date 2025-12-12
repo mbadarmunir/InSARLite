@@ -2,17 +2,6 @@
 
 Welcome to the InSARLite Developer Guide! This comprehensive guide covers the architecture, design patterns, and development practices for InSARLite.
 
-## Table of Contents
-
-```{toctree}
-:maxdepth: 2
-
-architecture
-contributing
-testing
-packaging
-```
-
 ## Project Overview
 
 InSARLite is a modern Python application built with:
@@ -528,12 +517,7 @@ InSARLite follows semantic versioning:
 
 ### 🤝 **Contributing**
 
-We welcome contributions! See the [Contributing Guide](contributing.md) for details on:
-
-- Code style and standards
-- Development setup
-- Testing requirements
-- Documentation guidelines
+We welcome contributions! See the [Contributing Guide](../contributing.md) for details on development setup, code standards, testing requirements, and documentation guidelines.
 
 ### 📋 **Issue Management**
 
@@ -546,7 +530,6 @@ We welcome contributions! See the [Contributing Guide](contributing.md) for deta
 
 Ready to contribute to InSARLite? Check out:
 
-- [Contributing Guidelines](contributing.md)
-- [Testing Guide](testing.md)
-- [API Reference](../api/index.md)
-- [Architecture Details](architecture.md)
+- [Contributing Guidelines](../contributing.md) - See how to contribute
+- [GitHub Repository](https://github.com/mbadarmunir/InSARLite) - View source code
+- [Issues](https://github.com/mbadarmunir/InSARLite/issues) - Report bugs or request features
