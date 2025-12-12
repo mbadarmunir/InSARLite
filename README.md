@@ -3,44 +3,49 @@
 [![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](https://github.com/mbadarmunir/InSARLite/releases)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17481377.svg)](https://doi.org/10.5281/zenodo.17481377)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17210560.svg)](https://doi.org/10.5281/zenodo.17210560)
 [![Documentation](https://img.shields.io/badge/docs-available-brightgreen.svg)](https://insarlite.readthedocs.io/)
 
 **InSARLite** is a comprehensive GUI application for Interferometric Synthetic Aperture Radar (InSAR) processing using the GMTSAR workflow. It provides an intuitive interface for processing Sentinel-1 SAR data to generate interferograms and perform time series analysis.
+
+> **📣 v1.3.0 Released!** First full public release featuring comprehensive documentation (600+ pages, 64 screenshots), Turkey landslide case study tutorial, interactive visualization with hover tooltips and polygon analysis, and true vector output for publication-quality graphics. [See Release Notes](RELEASE_NOTES_v1.3.0.md)
 
 ## 🌟 Key Features
 
 - **🛰️ Automated Data Management**: Seamless Sentinel-1 data search, download, and organization
 - **🎯 Interactive Baseline Planning**: Visual baseline network design with matplotlib-based plotting
 - **⚡ Complete GMTSAR Integration**: Full workflow from raw data to unwrapped interferograms
-- **📊 Advanced Visualization**: Professional plotting tools and time series analysis
+- **📊 Interactive Visualization**: Hover tooltips, polygon analysis, and true vector output (PDF/SVG/EPS)
+- **🗺️ Complete Tutorial**: Turkey landslide case study with 60 acquisitions and 64 screenshots
+- **📚 Professional Documentation**: 600+ pages covering installation to advanced analysis
 - **🔧 User-Friendly Interface**: Intuitive step-by-step workflow with progress tracking
 - **🖥️ Platform Support**: Optimized for Ubuntu Linux with WSL2 support for Windows
-- **🚀 Enhanced Performance**: Automatic GNU Parallel and SBAS Parallel installation
-- **🔄 WSL Auto-Configuration**: Automatic display configuration for all WSL versions
 
 ## 🚀 Quick Start
 
 ### Platform Compatibility
 
-- **✅ Ubuntu Linux** (Primary platform - fully tested)
-- **⚠️ Windows** (Use WSL2 with Ubuntu for best results)  
-- **⚠️ macOS** (Experimental support)
-- **⚠️ Other Linux** (May require manual configuration)
+**Supported Platform**: InSARLite has been developed and tested **exclusively on Ubuntu Linux**.
+
+- **✅ Ubuntu 20.04 LTS** (Fully tested and supported)
+- **✅ Ubuntu 22.04 LTS** (Fully tested and supported)
+- **⚠️ Other Linux** (Not tested - use at your own risk)
+- **⚠️ WSL2** (May work but not officially supported)
+- **❌ Native Windows** (Not supported - GMTSAR cannot compile on Windows)
+- **❌ macOS** (Not tested or supported)
 
 ### Installation
 
-Install InSARLite using pip:
+Install InSARLite on Ubuntu using pip:
 
 ```bash
 pip install insarlite
 ```
 
-**For Windows users**: Install WSL2 first, then install InSARLite inside Ubuntu:
-```powershell
-# In PowerShell as Administrator
-wsl --install -d Ubuntu-20.04
-```
+**Requirements**:
+- Ubuntu 20.04 LTS or 22.04 LTS
+- Python 3.8 or higher
+- NASA Earthdata account ([Register here](https://urs.earthdata.nasa.gov/users/new))
 
 ### Launch the Application
 
@@ -56,8 +61,8 @@ Comprehensive documentation is available at [insarlite.readthedocs.io](https://i
 
 - **[Installation Guide](https://insarlite.readthedocs.io/en/latest/installation.html)** - Detailed installation instructions
 - **[Quick Start Tutorial](https://insarlite.readthedocs.io/en/latest/quickstart.html)** - Get up and running in minutes
-- **[User Guide](https://insarlite.readthedocs.io/en/latest/user-guide/)** - Complete usage documentation
-- **[API Reference](https://insarlite.readthedocs.io/en/latest/api/)** - Detailed API documentation
+- **[Turkey Case Study](https://insarlite.readthedocs.io/en/latest/tutorials/turkey-case-study.html)** - Complete 60-acquisition workflow with screenshots
+- **[User Guide](https://insarlite.readthedocs.io/en/latest/user-guide/)** - Interface, workflow, and visualization tools
 - **[Developer Guide](https://insarlite.readthedocs.io/en/latest/developer-guide/)** - For contributors and developers
 
 ## 🛠️ What is InSAR?
@@ -68,13 +73,22 @@ Interferometric Synthetic Aperture Radar (InSAR) is a radar technique used to ge
 - **Interactive tools** for network design and parameter selection
 - **Professional visualization** for scientific analysis and publication
 
-## 🔧 Requirements
+## 🔧 System Requirements
 
-- **Python**: 3.8 or higher
-- **Operating System**: Linux, macOS, or Windows
-- **Memory**: 4 GB RAM minimum (8 GB recommended)
-- **Storage**: 2 GB free space (more for data processing)
+### Minimum
+- **OS**: Ubuntu 20.04/22.04 LTS
+- **Python**: 3.8+
+- **RAM**: 8 GB
+- **Storage**: 50 GB free space
 - **Network**: Internet connection for data downloads
+- **NASA Earthdata Account**: Required ([Register here](https://urs.earthdata.nasa.gov/users/new))
+
+### Recommended
+- **OS**: Ubuntu 22.04 LTS
+- **Python**: 3.9 or 3.10
+- **RAM**: 16 GB+
+- **Storage**: 100 GB+ SSD
+- **CPU**: Multi-core (4+ cores for parallel processing)
 
 ## 📊 Processing Workflow
 
@@ -90,26 +104,12 @@ InSARLite implements a complete 7-step InSAR processing pipeline:
 
 ## 🎯 Use Cases
 
-InSARLite is perfect for:
+InSARLite is designed for:
 
-- **Research**: Academic studies in geodesy, geophysics, and remote sensing
-- **Education**: Teaching InSAR principles and processing techniques
-- **Monitoring**: Operational monitoring of volcanoes, earthquakes, and subsidence
-- **Analysis**: Scientific analysis of surface deformation processes
-
-## 📈 Example Applications
-
-### Earthquake Studies
-Monitor co-seismic and post-seismic deformation with millimeter precision.
-
-### Volcano Monitoring
-Track volcanic inflation and deflation patterns over time.
-
-### Urban Subsidence
-Measure land subsidence in urban areas and correlate with infrastructure.
-
-### Natural Hazards
-Assess landslides, floods, and other geohazards using InSAR techniques.
+- **🔬 Research**: Academic studies in geodesy, geophysics, and remote sensing
+- **🎓 Education**: Teaching InSAR principles and processing workflows
+- **📊 Analysis**: Scientific analysis of surface deformation (landslides, subsidence, earthquakes, volcanoes)
+- **📖 Learning**: Comprehensive tutorial with real-world Turkey landslide case study
 
 ## 🤝 Contributing
 
@@ -138,7 +138,7 @@ If you use InSARLite in your research, please cite:
 **Zenodo DOI:**
 ```
 Munir, Muhammad Badar. (2025). InSARLite: A GUI Application for GMTSAR-based InSAR Processing (v1.3.0). 
-Zenodo. https://doi.org/10.5281/zenodo.17481377
+Zenodo. https://doi.org/10.5281/zenodo.17210560
 ```
 
 **BibTeX:**
@@ -149,8 +149,7 @@ Zenodo. https://doi.org/10.5281/zenodo.17481377
   year={2025},
   version={1.3.0},
   url={https://github.com/mbadarmunir/InSARLite},
-  doi={10.5281/zenodo.17481377},
-  license={MIT}
+  doi={10.5281/zenodo.17210560}
 }
 ```
 
