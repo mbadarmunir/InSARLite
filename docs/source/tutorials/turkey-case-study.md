@@ -1,14 +1,24 @@
 # Tutorial: Güngören Landslide Analysis - Complete Workflow
 
+## Warning: 
+
+This tutorial and InSARLite are provided for research and educational use only. Validate all results with independent data and do not use outputs for safety critical or operational decision-making.
+
+InSARLite is built on GMTSAR and uses it to run the processing steps. Therefore, GMTSAR assumptions, limitations, and any known issues or bugs may also affect InSARLite outputs.
+
+InSAR processing may require substantial CPU time, RAM, and disk space. Please ensure you have adequate computing infrastructure (please see prerequisites below) before starting, otherwise processing may be slow or may fail. 
+
 ## Introduction
 
-This comprehensive tutorial demonstrates the complete InSARLite workflow using real research data from the Güngören landslide in northeastern Turkey. This case study showcases InSARLite's capabilities for detecting precursory deformation signals before catastrophic slope failures.
+This tutorial demonstrates the complete InSARLite workflow using a case study area where a fatal landslide occurred in northeastern Turkey. Within the scope of this case study, the tutorial presents InSARLite’s key functionalities and user-friendly tools, enabling users to perform InSAR analyses without relying on command-line scripting.
 
 ### Study Area Background
 
-On December 8, 2024, a catastrophic landslide occurred in the Güngören area of northeastern Turkey, causing significant damage and loss of life. This tutorial demonstrates how InSAR time series analysis can detect precursory deformation signals in the months leading up to such failures, highlighting the potential for InSAR-based early warning systems.
+On December 8, 2024, a catastrophic landslide occurred in the Güngören area of northeastern Turkey, causing significant damage and loss of life (Gorum et al., 2025).
 
-The analysis reveals that the landslide was preceded by measurable surface deformation, with mean line-of-sight (LOS) velocities reaching up to 25 mm/yr in the source area. Notably, an acceleration in deformation was observed in November 2024, approximately one month before the failure event.
+Our analysis reveals that the landslide was preceded by measurable surface deformation, with mean line-of-sight (LOS) velocities reaching up to 25 mm/yr in the source area. Notably, an acceleration in deformation was observed in November 2024, approximately one month before the failure event.
+
+Gorum, T., Yılmaz, A., Tanyas, H., Akgun, A., Fidan, S., Akbaş, A., Karabacak, F., Coşkun, S., Uçar, T., Kılıcasan, H., & Tatar, O. (2025). 8 Aralık 2024 Güngören, Arhavi (Artvin) Moloz Çığının Oluşum Dinamiği ve Alanın Heyelan Tehlike ve Risk Bakımından Değerlendirmesi. https://doi.org/10.5281/zenodo.14625940
 
 ### Tutorial Objectives
 
@@ -16,9 +26,7 @@ By completing this tutorial, you will:
 
 - Master the complete InSARLite workflow from installation to final results
 - Process 60 Sentinel-1 acquisitions covering a real landslide event
-- Extract high-quality deformation time series showing precursory signals
-- Generate publication-quality results suitable for scientific research
-- Understand best practices for InSAR time series analysis
+- Extract deformation time series showing precursory signals
 
 ### Dataset Information
 
@@ -46,7 +54,7 @@ Before starting this tutorial, ensure you have:
 
 ### Time and Storage Requirements
 
-**Processing Time**: ~50+ hours total (highly dependent on CPU cores and internet speed)
+**Processing Time**: Processing time depends strongly on the number of CPU cores and internet speed. If the requirements below are met, the full workflow may complete in ~50+ hours. 
 
 - Project setup and data download: 1-3 hours
 - Baseline network design: 10-15 minutes  
@@ -183,8 +191,6 @@ If installation was successful, you'll see GMTSAR version information.
 1. Set start date to capture sufficient pre-failure baseline
 2. Set end date to include the failure event and some post-failure data
 3. For this study: Start ~early 2023, End ~late 2024
-
-**Recommended**: For landslide monitoring, include at least 12-18 months of data.
 
 ### Step 2.4: Query Available Data
 
@@ -360,6 +366,9 @@ output_folder/asc/
 
 ### Step 3.4: Calculate Master Table
 
+#### Warning:
+The procedure below is intended as *guidance* for master-image selection and does not guarantee the optimal master for every dataset. You may choose any acquisition as the master; the metrics computed here are provided only to support an informed decision.
+
 ![Master Table](../_static/images/turkey_case_study/02_baseline_network/13_Turkey_Base2Net_3.png)
 
 **What's shown**: Master table calculated and displayed, ranking all acquisitions by suitability as master image.
@@ -398,11 +407,11 @@ $$w_{ij} = \begin{cases}
 
 **Master Details**:
 - Date: August 29, 2023
-- Rank: 16 (not optimal by average baseline metric)
+- Rank: 16
 
 **Rationale for Rank 16 Selection**: 
 
-This tutorial intentionally selects rank 16 (rather than rank 1) to demonstrate an important SBAS concept:
+This tutorial intentionally selects rank 16 (rather than rank 1) to emphasize that master-image selection is entirely up to the user:
 
 **SBAS vs PSI Master Selection**:
 - **PSI (Persistent Scatterer)**: Requires optimal master with lowest average baseline because ALL interferograms reference this single master. Master quality critically affects entire dataset coherence.
@@ -417,8 +426,6 @@ In SBAS processing, master selection is far less critical than in PSI because:
 1. Review the ranked list
 2. Select rank 16 (as demonstrated) or rank 1 (optimal by metric)
 3. Click **Confirm Selection**
-
-**Educational note**: For SBAS, any reasonably connected acquisition works as master. For PSI, always select rank 1.
 
 ### Step 3.6: Define Baseline Constraints
 
@@ -546,7 +553,7 @@ In SBAS processing, master selection is far less critical than in PSI because:
    
 4. **Stage 4**: Mean correlation calculation
    - Computes average coherence across all interferograms
-   - Creates `corr_avg.grd` and `corr_std.grd`
+   - Creates `corr_stack.grd` and `std.grd`
    - Used later for mask definition
 
 **Real-time updates**: Terminal output shows detailed progress for each pair.
@@ -557,15 +564,14 @@ In SBAS processing, master selection is far less critical than in PSI because:
 
 ```
 F2/
-├── SLC/              # Aligned SAR images
+├── raw/              # Aligned SAR images
 │   └── *.SLC         # Single Look Complex images (all aligned to master)
 ├── intf_all/         # All interferograms
 │   └── 2023XXX_2024XXX/
 │       ├── phasefilt.grd     # Filtered wrapped phase
-│       ├── corr.grd           # Coherence/correlation
-│       └── phasefilt_mask.grd # Masked phase
-├── corr_avg.grd      # Mean correlation (for masking)
-└── corr_std.grd      # Correlation std deviation
+│       ├── corr.grd           # Correlation grid file
+├── corr_stack.grd      # Mean correlation (to aid in masking and reference point selection)
+└── std.grd      # Correlation std deviation
 ```
 
 **Processing complete**: Step 2 finished. Ready for unwrapping!
@@ -574,9 +580,10 @@ F2/
 
 ## Part 5: Phase Unwrapping (Step 3)
 
-Phase unwrapping is the most complex step, involving four distinct phases:
-1. Mask definition
-2. First unwrapping
+Phase unwrapping is a critical and computationally intensive process divided into 2 phases in InSARLite consisting cumulatively of 4 distinct steps:
+
+1. Mask definition (optional)
+2. Unwrapping process (of all wrapped interferograms)
 3. Reference point selection
 4. Unwrapping completion
 
@@ -587,18 +594,18 @@ Phase unwrapping is the most complex step, involving four distinct phases:
 ![Unwrap Default](../_static/images/turkey_case_study/04_unwrapping/16_Turkey_unwrap_1.png)
 
 **What's shown**: Default UnwrapApp state showing two main buttons:
-- **Def[ine Mask]**: Create/modify unwrapping mask
+- **Define Mask**: Create/modify unwrapping mask
 - **Phase 2**: Currently inactive (will activate after Phase 1)
 
-**User Action**: Click **Def** to define the unwrapping mask.
+**User Action**: Click **Define Mask** to define/skip the unwrapping mask.
 
-**Why mask?**: Unwrapping is only reliable in coherent areas. A mask excludes low-coherence pixels to prevent error propagation.
+**Why mask?**: Unwrapping is only reliable in coherent areas. A mask excludes low-coherence pixels to prevent error propagation and dramatically reduce the computational requirements.
 
 #### Step 5.1.2: Handle Existing Mask
 
 ![Mask Exists](../_static/images/turkey_case_study/04_unwrapping/16_Turkey_unwrap_2.png)
 
-**What's shown**: Prompt indicating a mask already exists (perhaps from previous run).
+**What's shown**: In case of an existing mask, users are asked if they want to use the existing one or create a new one.
 
 **User Action**: Click **Yes** to recreate the mask fresh.
 
@@ -619,13 +626,13 @@ Phase unwrapping is the most complex step, involving four distinct phases:
 - Display shows mean correlation map
 
 **User Action**: 
-1. Set threshold to 0.08 (good starting point for landslide areas)
+1. Set threshold to 0.08. The idea is to exclude ocean pixels.
 2. Click **Update Mask**
 3. Visualize the mask on the correlation map
 
 **Interpretation**: 
-- Blue/low values: Low coherence (water, vegetation, steep slopes)
-- Red/high values: High coherence (bare ground, stable areas)
+- Red/low values: Low coherence (water, vegetation, steep slopes)
+- Green/high values: High coherence (bare ground, stable areas)
 - Threshold of 0.08 excludes very low coherence while retaining landslide area
 
 #### Step 5.1.4: Add Polygon Mask
@@ -635,15 +642,14 @@ Phase unwrapping is the most complex step, involving four distinct phases:
 **What's shown**: Polygon mask prompt offering option to add manual delineation.
 
 **Why polygon?**: Sometimes you want to:
-- Focus on specific area of interest
 - Exclude problematic regions manually
-- Refine threshold-based mask
+- Refine threshold-based mask where any specific mean correlation value alone may exclude valid (land) pixels or include a lot of ocean pixels for unwrapping.
 
 **User Action**: Click **Polygon** to draw manual mask.
 
 ![Polygon Drawn](../_static/images/turkey_case_study/04_unwrapping/16_Turkey_unwrap_6.png)
 
-**What's shown**: One polygon drawn on the correlation map (cyan outline).
+**What's shown**: One polygon drawn on the correlation map (cyan outline). Multiple polygons can be drawn and a composite mask can be created. This case study uses two polygons to mask out oceans along with the mean correlation threshold value of 0.08 for masking. Delineation of only the first polygon is shown here.
 
 **User Action**: 
 1. Click to place vertices around your area of interest
@@ -704,7 +710,7 @@ Phase unwrapping is the most complex step, involving four distinct phases:
 
 **What's shown**: Phase 1 completed with parameters:
 - **Threshold**: 0.01 (default SNAPHU threshold)
-- **Patch size**: 95 (default patch size for parallel unwrapping)
+- **Number of cores**: 95 (A default value is auto-filled depending on the CPU, as number of threads available - 1)
 
 **Processing**: SNAPHU uses statistical-cost, network-flow algorithm for phase unwrapping.
 
@@ -718,7 +724,7 @@ Phase unwrapping is the most complex step, involving four distinct phases:
 
 **Status**: Interferograms are unwrapped but not yet normalized to a common reference point.
 
-**User Action**: Proceed to reference point selection (Phase 3).
+**User Action**: Proceed to reference point selection.
 
 ### Phase 3: Reference Point Selection
 
@@ -726,7 +732,7 @@ Phase unwrapping is the most complex step, involving four distinct phases:
 
 ![Reference Exists](../_static/images/turkey_case_study/04_unwrapping/16_Turkey_unwrap_13.png)
 
-**What's shown**: Prompt indicating reference point already exists.
+**What's shown**: When applicable, this prompt allows the user to choose an existing reference point or to select a new one instead of the existing one.
 
 **User Action**: Click **Yes** to redefine reference point.
 
@@ -738,7 +744,7 @@ Phase unwrapping is the most complex step, involving four distinct phases:
 
 **What's shown**: Enhanced reference point selection interface with multiple selection methods.
 
-**Default selection**: "Highest mean corr" is automatically selected, showing the location with highest average coherence.
+**Default selection**: "Highest mean corr" is automatically selected, showing the location with the highest average correlation.
 
 **Why this matters**: The reference point should be:
 - Stable (no deformation)
@@ -754,14 +760,15 @@ Phase unwrapping is the most complex step, involving four distinct phases:
 **What's shown**: Manual definition controls visible.
 
 **Selection methods available**:
+
 1. **Automated**:
-   - Highest mean correlation (recommended)
-   - Lowest correlation std deviation
+   - Highest mean correlation (default selection)
+   - Lowest std deviation of correlation
    
 2. **Manual**:
    - Click on mean correlation map
    - Click on validity count map
-   - Enter coordinates directly (Geographic or Radar)
+   - Enter coordinates directly (geographic or radar)
 
 ![Radar Option](../_static/images/turkey_case_study/04_unwrapping/16_Turkey_unwrap_17.png)
 
@@ -826,9 +833,7 @@ Phase unwrapping is the most complex step, involving four distinct phases:
 ```
 F2/intf_all/2023XXX_2024XXX/
 ├── unwrap.grd           # Unwrapped phase
-├── unwrap_mask.grd      # Unwrapped phase with mask
-├── phase.grd            # Wrapped phase
-└── corr.grd             # Coherence
+├── unwrap_pin.grd      # Normalized Unwrapped phase 
 ```
 
 **Summary**: Step 3 complete! You've successfully:
@@ -856,19 +861,19 @@ F2/intf_all/2023XXX_2024XXX/
 **Other parameters**:
 - **Smoothing**: Spatial smoothing factor (0.0 = no smoothing)
 - **Atmospheric iterations**: Number of iterations for atmospheric correction (default: 3)
-- **Wavelength**: Radar wavelength (auto-set for Sentinel-1)
+- **Wavelength**: Radar wavelength (calculated from metadata of all input images automatically. For more details, please refer to GMTSAR documentation for the exact equation and theory.)
 
 ### Step 6.2: Confirm Existing Displacement Files
 
 ![SBAS Confirm](../_static/images/turkey_case_study/05_sbas_visualization/17_Turkey_SBAS_2.png)
 
-**What's shown**: SBAS confirmation prompt indicating 60 existing displacement files found.
+**What's shown**: When valid, a prompt asks the user whether to rerun the process or skip it.
 
 **What this means**: All interferograms have been successfully unwrapped and are ready for inversion.
 
 **User Action**: Click **OK** to proceed.
 
-**Background**: SBAS requires `disp_*.grd` files (unwrapped phase converted to line-of-sight displacement) for each interferogram.
+**Background**: SBAS creates `disp_*.grd` files (unwrapped phase converted to line-of-sight displacement) for each input image epoch as well as a vel.grd file showing the overall velocity value of each pixel.
 
 ### Step 6.3: Execute SBAS Inversion
 
@@ -903,11 +908,11 @@ where $\alpha$ = smoothing factor, $\mathbf{L}$ = Laplacian operator.
 **Files created**:
 
 ```
-F2/SBAS/
+SBAS/
 ├── disp_YYYYMMDD.grd    # Displacement at each epoch
 ├── vel.grd              # Mean velocity (mm/yr)
 ├── rms.grd              # RMS of fit (optional)
-└── dem_error.grd        # DEM error estimate (optional)
+└── dem_err.grd        # DEM error estimate (optional)
 ```
 
 ### Step 6.4: Launch Surface Deformation Visualizer
@@ -1071,53 +1076,58 @@ This analysis demonstrates several key capabilities of InSAR and InSARLite:
 
 ### Step 8.1: Project Directory Structure
 
-After complete processing, your project folder contains:
+After complete processing, your project folder contains the following basic structure:
 
 ```
-project_folder/
-├── raw/                          # Original data
-│   └── *.SAFE/                   # Sentinel-1 SAFE directories
+project_folder/asc/
+└── data/
+    ├── *.SAFE/                   # Symlinks of Sentinel-1 SAFE directories
+    └── S1*.EOF                    # Downloaded precise orbit files
 │
-├── topo/                         # Topographic products
-│   ├── dem.grd                   # DEM in radar coordinates
-│   └── master.PRM                # Master image parameters
 │
-├── orbits/                       # Precise orbit files
-│   └── S1*.EOF                   # ESA orbit files
+├── topo/                          # Topographic products
+│   └── dem.grd                    # Symlink of DEM in radar coordinates
 │
-└── F2/                           # IW2 subswath processing
-    │
+└── F2/                            # IW2 subswath processing
+    ├── raw/
+    │   ├── *.tiff/                # Symlinks of relevant TIFF files per subswath and user-selected polarization
+    │   └── S1*.EOF                # Symlinks for precise orbit files
+       ├── 202XXXXX.SLC          # Single Look Complex images
+       └── 202XXXXX.PRM          # Parameter files
     ├── baseline_table.dat        # Baseline information
     ├── intf.in                   # Interferogram pair list
-    ├── corr_avg.grd              # Mean correlation
-    ├── corr_std.grd              # Correlation std deviation
+    
     │
-    ├── SLC/                      # Aligned SAR images
-    │   ├── 2023XXXX.SLC          # Single Look Complex images
-    │   └── 2023XXXX.PRM          # Parameter files
+    ├── topo/                         # Topographic products
+         ├── dem.grd                   # Symlink of DEM in radar coordinates
+         ├── trans.dat              # Transformation table for geo-radar coordinates conversion
+         ├── topo_ra.grd              # DEM in radar coordinates
+         ├── master.prm              # Master metadata file
+
     │
     ├── intf_all/                 # All interferograms
+        ├── corr_stack.grd              # Mean correlation
+        ├── std.grd              # Correlation std deviation
     │   └── 2023XXXX_2024XXXX/    # Individual interferogram folders
     │       ├── phasefilt.grd     # Filtered wrapped phase
     │       ├── unwrap.grd        # Unwrapped phase
-    │       ├── unwrap_mask.grd   # Masked unwrapped phase
+    │       ├── unwrap_pin.grd   # Normalized unwrapped phase
     │       ├── corr.grd          # Coherence
-    │       └── disp_*.grd        # LOS displacement
     │
-    └── SBAS/                     # Time series results
-        ├── disp_YYYYMMDD.grd     # Displacement at each epoch
-        ├── vel.grd               # Mean velocity (radar coords)
-        ├── vel_ll.grd            # Mean velocity (geographic)
-        ├── vel.kml               # Google Earth overlay
-        │
-        └── time_series/          # Extracted time series
-            └── polygon_9vertices_15pixels/
-                ├── timeseries_*.png      # Plots (raster)
-                ├── timeseries_*.eps      # Plots (vector)
-                ├── timeseries_*.pdf      # Plots (vector)
-                ├── timeseries_*.svg      # Plots (vector)
-                ├── timeseries_*.csv      # Data (for analysis)
-                └── timeseries_*_map.png  # Location maps
+└── SBAS/                     # Time series results
+   ├── disp_YYYYMMDD.grd     # Displacement at each epoch
+   ├── vel.grd               # Mean velocity (radar coords)
+   ├── vel_ll.grd            # Mean velocity (geographic)
+   ├── vel.kml               # Google Earth overlay
+   │
+   └── time_series/          # Extracted time series
+      └── polygon_9vertices_15pixels/
+            ├── timeseries_*.png      # Plots (raster)
+            ├── timeseries_*.eps      # Plots (vector)
+            ├── timeseries_*.pdf      # Plots (vector)
+            ├── timeseries_*.svg      # Plots (vector)
+            ├── timeseries_*.csv      # Data (for analysis)
+            └── timeseries_*_map.png  # Location maps
 ```
 
 ### Step 8.2: Key Output Files
@@ -1232,7 +1242,7 @@ Throughout this tutorial, you've completed the entire InSARLite workflow:
 ### Best Practices Learned
 
 1. **Master Selection**: Use network centrality for optimal connectivity
-2. **Baseline Constraints**: Balance network density and coherence (250m, 48 days good for landslides)
+2. **Baseline Constraints**: Balance network density and coherence
 3. **Mask Definition**: Combine threshold and polygon for optimal unwrapping
 4. **Reference Point**: Select stable, high-coherence area outside deformation zone
 5. **SBAS Parallel**: Use all CPU cores for faster inversion
