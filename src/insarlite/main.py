@@ -2028,7 +2028,40 @@ class InSARLiteApp:
             
         out_folder = self.output_folder_entry.get().strip()
         proj_name = self.project_name_entry.get().strip()
+        
+        # Validate that output_folder is not same as or within data_folder
         if out_folder and proj_name:
+            data_folder = self.data_folder_entry.get().strip() if hasattr(self, "data_folder_entry") else ""
+            if data_folder and out_folder:
+                # Normalize paths for comparison
+                try:
+                    data_folder_abs = os.path.abspath(data_folder)
+                    out_folder_abs = os.path.abspath(out_folder)
+                    
+                    # Check if output_folder is same as or within data_folder
+                    try:
+                        rel_path = os.path.relpath(out_folder_abs, data_folder_abs)
+                        if not rel_path.startswith('..'):
+                            messagebox.showerror(
+                                "Invalid Output Folder",
+                                "Output folder cannot be the same as or inside the data folder.\n\n"
+                                f"Data Folder: {data_folder_abs}\n"
+                                f"Output Folder: {out_folder_abs}\n\n"
+                                "Please choose a different output location."
+                            )
+                            if hasattr(self, "confirm_config_btn"):
+                                self.confirm_config_btn.grid_remove()
+                            if hasattr(self, "gacos_btn"):
+                                self.gacos_btn.grid_remove()
+                            return
+                    except ValueError:
+                        # Different drives on Windows, no conflict
+                        pass
+                        
+                except Exception:
+                    # If path validation fails, allow it to proceed
+                    pass
+            
             if hasattr(self, "confirm_config_btn"):
                 self.confirm_config_btn.config(state="normal")
                 self.confirm_config_btn.grid()
@@ -2207,6 +2240,30 @@ class InSARLiteApp:
         if not out_folder or not proj_name:
             messagebox.showwarning("Configuration", "Please specify both output folder and project name.")
             return
+        
+        # Validate that output_folder is not same as or within data_folder
+        data_folder = self.data_folder_entry.get().strip() if hasattr(self, "data_folder_entry") else ""
+        if data_folder and out_folder:
+            try:
+                data_folder_abs = os.path.abspath(data_folder)
+                out_folder_abs = os.path.abspath(out_folder)
+                
+                # Check if output_folder is same as or within data_folder
+                try:
+                    rel_path = os.path.relpath(out_folder_abs, data_folder_abs)
+                    if not rel_path.startswith('..'):
+                        messagebox.showerror(
+                            "Invalid Output Folder",
+                            "Output folder cannot be the same as or inside the data folder.\n\n"
+                            f"Data Folder: {data_folder_abs}\n"
+                            f"Output Folder: {out_folder_abs}\n\n"
+                            "Please choose a different output location."
+                        )
+                        return
+                except ValueError:
+                    pass  # Different drives on Windows
+            except Exception:
+                pass  # Allow to proceed if validation fails
             
         self.log_file = None
         

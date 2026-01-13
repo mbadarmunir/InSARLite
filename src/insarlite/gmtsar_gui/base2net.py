@@ -80,14 +80,16 @@ class BaselineGUI:
         return conf
 
     def _save_config(self):
-        """Save alignment configuration only if changed."""
+        """Save alignment configuration and baseline constraints only if changed."""
         conf = self._load_config()
         
-        # New values to save
+        # New values to save (including baseline constraints)
         new_values = {
             "mst": self.mst,
             "align_mode": self.align_mode_var.get(),
-            "esd_mode": self.esd_mode_var.get()
+            "esd_mode": self.esd_mode_var.get(),
+            "perpendicular_baseline_constraint": self.perp_var.get() if hasattr(self, 'perp_var') else None,
+            "temporal_baseline_constraint": self.temp_var.get() if hasattr(self, 'temp_var') else None
         }
         
         # Check if any value has changed
@@ -103,11 +105,11 @@ class BaselineGUI:
             try:
                 with open(self.conf_path, "w") as f:
                     json.dump(conf, f, indent=2)
-                print(f"Updated alignment config: {', '.join(f'{k}={v}' for k, v in new_values.items() if v is not None)}")
+                print(f"Updated config: {', '.join(f'{k}={v}' for k, v in new_values.items() if v is not None)}")
             except Exception as e:
                 print(f"Could not save config: {e}")
         else:
-            print("Alignment config unchanged, skipping save")
+            print("Config unchanged, skipping save")
 
     def _save_master_selection_cache(self, marray):
         """Save master selection cache only if changed."""
@@ -1451,22 +1453,30 @@ class BaselineGUI:
     def _on_export_edges(self, primary_dir=None):
         """Export edge list and save plot using matplotlib plotter."""
         
-        # Always save the plot first, regardless of config status
+        # Always save the plot first
         if self.plotter:
             self._save_baseline_plot(primary_dir)
         
-        # If user chose to use previous config, skip writing intf.in
+        # Check if config and baseline constraints unchanged, skip writing intf.in if so
         conf = self._load_config()
         prev_mst = conf.get("mst")
         prev_align = conf.get("align_mode")
         prev_esd = conf.get("esd_mode")
+        prev_perp = conf.get("perpendicular_baseline_constraint")
+        prev_temp = conf.get("temporal_baseline_constraint")
+        
+        current_perp = self.perp_var.get() if hasattr(self, 'perp_var') else None
+        current_temp = self.temp_var.get() if hasattr(self, 'temp_var') else None
+        
         if (
             self.mst == prev_mst
             and self.align_mode_var.get() == prev_align
             and self.esd_mode_var.get() == prev_esd
-            and os.path.exists(os.path.join(primary_dir, "intf.in"))
+            and current_perp == prev_perp
+            and current_temp == prev_temp            
         ):
-            # Using previous config - still need to check for unconnected images
+            # Config and constraints unchanged - still need to check for unconnected images
+            print(f"✅ Network config unchanged (master, alignment, and baseline constraints)")
             intf_path = os.path.join(primary_dir, "intf.in")
             raw_dir = os.path.join(primary_dir, "raw")
             data_in_path = os.path.join(raw_dir, "data.in")
@@ -1482,6 +1492,10 @@ class BaselineGUI:
                 self._save_config()
             self.root.destroy()
             return
+        
+        # If we reach here, something changed - regenerate intf.in
+        if current_perp != prev_perp or current_temp != prev_temp:
+            print(f"🔄 Baseline constraints changed: perp {prev_perp}->{current_perp}, temp {prev_temp}->{current_temp}")
 
         if not self.plotter:
             messagebox.showerror("Error", "No baseline plot available for export.")
@@ -1491,7 +1505,7 @@ class BaselineGUI:
         edge_data = self.plotter.get_edge_list()
         edge_list = [f"{pair[0]}:{pair[1]}" for pair in edge_data]
 
-        # Save interferometric pairs to intf.in
+        # Always save interferometric pairs to intf.in (even if config unchanged)
         intf_path = os.path.join(primary_dir, "intf.in")
         with open(intf_path, "w") as f:
             for pair in edge_list:
@@ -1525,16 +1539,33 @@ class BaselineGUI:
 
         # Copy to other subswaths and clean up unconnected images
         from ..gmtsar_gui.pair_generation import remove_unconnected_images
-        primary_key = edge_list[0][-2:] if edge_list else ""
+        
+        # Extract primary subswath number from primary_dir (e.g., /path/to/F1 -> "1")
+        primary_subswath = os.path.basename(primary_dir)[-1] if primary_dir else "1"
+        
         for key in ["pF1", "pF2", "pF3"]:
             dir_path = self.paths.get(key)
             if dir_path and os.path.exists(dir_path) and dir_path != primary_dir:
                 try:
-                    shutil.copy2(intf_path, dir_path)
-                    print(f"Copied intf.in to {dir_path}")
+                    # Get target subswath number
+                    target_subswath = os.path.basename(dir_path)[-1]
+                    
+                    # Copy and modify intf.in with correct subswath references
+                    subswath_intf = os.path.join(dir_path, "intf.in")
+                    shutil.copy2(intf_path, subswath_intf)
+                    
+                    # Modify subswath references in the copied file
+                    with open(subswath_intf, 'r') as f:
+                        lines = f.readlines()
+                    with open(subswath_intf, 'w') as f:
+                        for line in lines:
+                            # Replace _ALL_F1 with _ALL_F2, etc.
+                            modified_line = line.replace(f'_ALL_F{primary_subswath}', f'_ALL_F{target_subswath}')
+                            f.write(modified_line)
+                    
+                    print(f"Copied and modified intf.in to {dir_path} (F{primary_subswath} -> F{target_subswath})")
                     
                     # Also remove unconnected images for this subswath
-                    subswath_intf = os.path.join(dir_path, "intf.in")
                     subswath_raw = os.path.join(dir_path, "raw")
                     subswath_data_in = os.path.join(subswath_raw, "data.in")
                     if os.path.exists(subswath_data_in):

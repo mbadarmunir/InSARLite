@@ -121,29 +121,55 @@ def remove_unconnected_images(ind, dind):
             return set()
             
 def gen_pairs(paths, parallel_baseline, perpendicular_baseline, console_text, log_file_path):
+    # Generate intf.in for the first valid subswath, then copy to others
+    primary_key = None
+    primary_dir = None
+    
+    # Find the first valid subswath
     for key in ["pF1", "pF2", "pF3"]:
-        dir_path = paths.get(key)                  
-        if dir_path and os.path.exists(dir_path):     
+        dir_path = paths.get(key)
+        if dir_path and os.path.exists(dir_path):
+            primary_key = key
+            primary_dir = dir_path
+            break
+    
+    if not primary_key:
+        print("No valid subswath directories found for pair generation")
+        return
+    
+    # Generate intf.in for primary subswath (always regenerate, don't check if exists)
+    ind = os.path.join(primary_dir, "intf.in")
+    dind = os.path.join(primary_dir, "raw", "data.in")
+    
+    os.chdir(primary_dir)
+    print(f"Generating IFGs pairs for {primary_key}...")
+    subprocess.call('select_pairs.csh baseline_table.dat {} {}'.format(parallel_baseline, perpendicular_baseline), shell=True)
+    print(f"✅ Generated intf.in for {primary_key}")
+    
+    # Copy the generated intf.in file to other subswaths
+    for other_key in ["pF1", "pF2", "pF3"]:
+        if other_key != primary_key:
+            other_dir_path = paths.get(other_key)
+            
+            if other_dir_path and os.path.exists(other_dir_path):
+                other_ind = os.path.join(other_dir_path, "intf.in")
+                # Copy the file
+                shutil.copy(ind, other_ind)
+                # Always modify subswath references after copying
+                with open(other_ind, 'r') as f:
+                    lines = f.readlines()
+                with open(other_ind, 'w') as f:
+                    for line in lines:
+                        # Replace _ALL_F1 with _ALL_F2, etc.
+                        modified_line = line.replace(f'_ALL_F{primary_key[-1]}', f'_ALL_F{other_key[-1]}')
+                        f.write(modified_line)
+                print(f"  Copied and modified intf.in: F{primary_key[-1]} -> F{other_key[-1]}")
+    
+    # Remove unconnected images from data.in for all subswaths
+    for key in ["pF1", "pF2", "pF3"]:
+        dir_path = paths.get(key)
+        if dir_path and os.path.exists(dir_path):
             ind = os.path.join(dir_path, "intf.in")
             dind = os.path.join(dir_path, "raw", "data.in")
-            if not os.path.exists(ind):
-                os.chdir(dir_path)
-                print(f"Starting IFGs pairs selection {key}...")
-                subprocess.call('select_pairs.csh baseline_table.dat {} {}'.format(parallel_baseline, perpendicular_baseline), shell=True)
-                
-                # Copy the generated intf.in file to other paths
-                for other_key in ["pF1", "pF2", "pF3"]:
-                    if other_key != key:
-                        other_dir_path = paths.get(other_key)
-                        
-                        if other_dir_path and os.path.exists(other_dir_path):
-                            other_ind = os.path.join(other_dir_path, "intf.in")
-                            if not os.path.exists(other_ind):
-                                shutil.copy(ind, other_ind)
-                                with open(other_ind, 'r') as f:
-                                    lines = f.readlines()
-                                with open(other_ind, 'w') as f:
-                                    for line in lines:
-                                        f.write(line.replace(f'F{key[-1]}', f'F{other_key[-1]}'))
-
-            remove_unconnected_images(ind, dind)
+            if os.path.exists(ind) and os.path.exists(dind):
+                remove_unconnected_images(ind, dind)

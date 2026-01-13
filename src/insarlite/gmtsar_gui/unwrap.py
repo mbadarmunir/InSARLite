@@ -83,9 +83,18 @@ class UnwrapApp(tk.Frame):
                 print("Unwrapping complete but validity file missing - will be created in Phase 1")
 
     def _init_widgets(self):
-        self.btn_mask = tk.Button(self, text="Define Mask", command=self.define_mask)
-        self.btn_mask.pack(pady=10)
+        # Create frame for mask buttons row
+        mask_frame = tk.Frame(self)
+        mask_frame.pack(pady=10)
+        
+        self.btn_mask = tk.Button(mask_frame, text="Define Mask", command=self.define_mask)
+        self.btn_mask.pack(side="left", padx=5)
         add_tooltip(self.btn_mask, "Create or load a coherence mask\nMasks out low coherence areas before unwrapping\nButton color indicates status:\n• Red: No mask defined\n• Green: Mask defined")
+        
+        # Delete Mask button (initially disabled)
+        self.btn_delete_mask = tk.Button(mask_frame, text="Delete Mask", command=self.delete_mask, state=tk.DISABLED)
+        self.btn_delete_mask.pack(side="left", padx=5)
+        add_tooltip(self.btn_delete_mask, "Delete existing mask\nOnly enabled when mask is defined")
 
         self.btn_ref = tk.Button(self, text="Define Reference Point", command=self.define_reference_point, state=tk.DISABLED)
         self.btn_ref.pack(pady=10)
@@ -106,6 +115,18 @@ class UnwrapApp(tk.Frame):
         self.unwrap_btn = None
         self._controls_packed = False
         
+        # Check for existing mask and prompt user
+        mask_path = os.path.join(self.ifgsroot, "mask_def.grd")
+        if os.path.exists(mask_path):
+            self.after(100, lambda: self._prompt_existing_mask(mask_path))
+        else:
+            # No mask exists - set button to red
+            self.btn_mask.config(bg="red")
+        
+        # Show Phase 1 controls by default unless phase 1 is already completed
+        if not (hasattr(self, '_phase1_completed') and self._phase1_completed):
+            self.show_phase1_controls()
+        
         # Check if unwrapping is already done and adjust button states accordingly
         if hasattr(self, '_unwrapping_done') and self._unwrapping_done:
             # Unwrapping is complete - enable reference point button
@@ -113,62 +134,83 @@ class UnwrapApp(tk.Frame):
             # If phase1 is complete, show controls for phase 2
             if hasattr(self, '_phase1_completed') and self._phase1_completed:
                 self.btn_ref.config(text="Phase 2: Define Reference Point", bg="orange")
-        
-        # Ensure Define Mask button is always active initially - user must click to interact
-        self.btn_mask.config(state=tk.NORMAL, bg=self.btn_mask.cget("bg") if hasattr(self.btn_mask, 'cget') else "SystemButtonFace")
 
-    def _set_button_state(self, mask_exists):
-        self.btn_mask.config(bg="green" if mask_exists else "red", state=tk.DISABLED)
-        if mask_exists:
-            # Show Phase 1 unwrapping controls after mask is defined
-            self.show_phase1_controls()
-            # Reference point button is disabled until Phase 1 is complete
-            self.btn_ref.config(state=tk.DISABLED, text="Define Reference Point (Complete Phase 1 first)")
+    def _prompt_existing_mask(self, mask_path):
+        """Automatically prompt user about existing mask on startup"""
+        use_existing = messagebox.askyesno(
+            "Mask Exists",
+            "A mask already exists. Do you want to use the existing mask?\n\nYes: Use existing mask\nNo: Mask not confirmed",
+            parent=self.winfo_toplevel()
+        )
+        self._focus_window()
+        if use_existing:
+            self.btn_mask.config(bg="green")
+            self.btn_delete_mask.config(state=tk.NORMAL)
         else:
+            self.btn_mask.config(bg="red")
+            self.btn_delete_mask.config(state=tk.DISABLED)
+    
+    def _set_button_state(self, mask_exists):
+        self.btn_mask.config(bg="green" if mask_exists else "red")
+        self.btn_delete_mask.config(state=tk.NORMAL if mask_exists else tk.DISABLED)
+        if not mask_exists:
             self.btn_ref.config(state=tk.DISABLED)
 
+    def delete_mask(self):
+        """Delete existing mask after user confirmation"""
+        mask_path = os.path.join(self.ifgsroot, "mask_def.grd")
+        
+        if not os.path.exists(mask_path):
+            messagebox.showinfo("No Mask", "No mask file exists to delete.", parent=self.winfo_toplevel())
+            self._focus_window()
+            return
+        
+        confirm = messagebox.askyesno(
+            "Delete Mask",
+            "Are you sure you want to delete the existing mask?\n\nThis action cannot be undone.",
+            parent=self.winfo_toplevel()
+        )
+        self._focus_window()
+        
+        if confirm:
+            try:
+                os.remove(mask_path)
+                self.btn_mask.config(bg="red")
+                self.btn_delete_mask.config(state=tk.DISABLED)
+                messagebox.showinfo("Mask Deleted", "Mask has been deleted successfully.", parent=self.winfo_toplevel())
+                self._focus_window()
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not delete mask: {e}", parent=self.winfo_toplevel())
+                self._focus_window()
+    
     def define_mask(self):
+        """Open mask viewer to create/redefine mask"""
         mask_path = os.path.join(self.ifgsroot, "mask_def.grd")
         grd_file = os.path.join(self.ifgsroot, "corr_stack.grd")
-
+        
+        # If mask exists, ask if user wants to recreate
         if os.path.exists(mask_path):
-            use_existing = messagebox.askyesno(
-                "Mask Exists",
-                "A mask already exists. Do you want to use the existing mask?\n\nYes: Use existing\nNo: Recreate",
-                parent=self.winfo_toplevel()
-            )
-            self._focus_window()
-            if use_existing:
-                self._set_button_state(True)
-                return
             recreate = messagebox.askyesno(
                 "Recreate Mask",
-                "Are you sure you want to delete the existing mask and create a new one?",
+                "A mask already exists. Do you want to delete it and create a new one?\n\nYes: Delete and recreate\nNo: Cancel",
                 parent=self.winfo_toplevel()
             )
             self._focus_window()
-            if recreate:
-                try:
-                    os.remove(mask_path)
-                except Exception as e:
-                    messagebox.showerror("Error", f"Could not delete mask: {e}", parent=self.winfo_toplevel())
-                    self._focus_window()
-                    return
-                viewer = GrdViewer(self.winfo_toplevel(), grd_file)  # pass parent
-                self.wait_window(viewer)            # pause execution until viewer is destroyed
-                self._set_button_state(os.path.exists(mask_path))
-                # self._set_button_state(os.path.exists(mask_path))
-        else:
-            answer = messagebox.askyesno("Define Mask", "Do you want to create/define a mask?", parent=self.winfo_toplevel())
-            self._focus_window()
-            if answer:
-                viewer = GrdViewer(self.winfo_toplevel(), grd_file)  # pass parent
-                self.wait_window(viewer)            # pause execution until viewer is destroyed
-                self._set_button_state(os.path.exists(mask_path))
-            else:
-                self._set_button_state(False)
-                # self._set_button_state(os.path.exists(mask_path))
-        # self._set_button_state(os.path.exists(mask_path))
+            if not recreate:
+                return
+            try:
+                os.remove(mask_path)
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not delete mask: {e}", parent=self.winfo_toplevel())
+                self._focus_window()
+                return
+        
+        # Open viewer to create mask
+        viewer = GrdViewer(self.winfo_toplevel(), grd_file)
+        self.wait_window(viewer)
+        
+        # Update button states based on whether mask was created
+        self._set_button_state(os.path.exists(mask_path))
 
     def define_reference_point(self):
         topodir = self.topodir

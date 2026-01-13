@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "insarlite"
-version = "1.3.0"
+version = "1.3.1"
 description = "A comprehensive GUI application for GMTSAR-based InSAR processing"
 readme = "README.md"
 authors = [
@@ -53,6 +53,8 @@ dependencies = [
     "shapely>=1.7.0",
     "cartopy>=0.20.0",
     "dask>=2021.6.0",
+    "numba>=0.56.0,<0.60.0",
+    "sparse>=0.13.0,<0.16.0",
     "packaging>=20.0",
     "Pillow>=8.0.0",
     "scipy>=1.7.0",

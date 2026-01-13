@@ -2,13 +2,13 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](https://github.com/mbadarmunir/InSARLite/releases)
+[![Version](https://img.shields.io/badge/version-1.3.1-blue.svg)](https://github.com/mbadarmunir/InSARLite/releases)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17210560.svg)](https://doi.org/10.5281/zenodo.17210560)
 [![Documentation](https://img.shields.io/badge/docs-available-brightgreen.svg)](https://insarlite.readthedocs.io/)
 
 **InSARLite** is a comprehensive GUI application for Interferometric Synthetic Aperture Radar (InSAR) processing using the GMTSAR workflow. It provides an intuitive interface for processing Sentinel-1 SAR data to generate interferograms and perform time series analysis.
 
-> **📣 v1.3.0 Released!** First full public release featuring comprehensive documentation (600+ pages, 64 screenshots), Turkey landslide case study tutorial, interactive visualization with hover tooltips and polygon analysis, and true vector output for publication-quality graphics. [See Release Notes](RELEASE_NOTES_v1.3.0.md)
+> **📣 v1.3.1 Released!** Patch release with important bug fixes: output folder validation to prevent data corruption, baseline constraints configuration persistence, subswath-specific interferogram generation fixes, and alignment workflow improvements. [See Release Notes](RELEASE_NOTES_v1.3.1.md)
 
 ## 🌟 Key Features
 

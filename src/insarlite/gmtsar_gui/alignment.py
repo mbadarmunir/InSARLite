@@ -108,25 +108,27 @@ def align_sec_imgs(paths, mst, dem, alignmode, esd_mode):
             print(f"✅ Alignment status for {key}: {alignment_status.get('status')} - {alignment_status.get('aligned_images', 0)}/{alignment_status.get('total_images', 0)} connected images")
             
             if alignment_status['status'] == 'complete':
-                print(f"✅ Alignment already completed for {key} - all {alignment_status['aligned_images']}/{alignment_status['total_images']} connected images aligned")
-                process_logger(process_num=process_num, log_file=paths.get("log_file_path"), message=f"Alignment already complete for {key} (all connected images)", mode="end")
-                return
+                # Check if alignment method has changed even though alignment is complete
+                if check_alignment_method_change(praw, alignmode, esd_mode):
+                    print(f"🔄 Alignment method changed for {key} - offering to backup and re-align")
+                    _backup_alignment_files_with_permission(praw, key, reason="method_change")
+                    print(f"🔄 Proceeding with full re-alignment due to method change")
+                    _perform_full_alignment(praw, mst, dem, aligncommand, esd_mode, key, lock)
+                else:
+                    print(f"✅ Alignment already completed for {key} - all {alignment_status['aligned_images']}/{alignment_status['total_images']} connected images aligned")
+                    process_logger(process_num=process_num, log_file=paths.get("log_file_path"), message=f"Alignment already complete for {key} (all connected images)", mode="end")
+                    return
             elif alignment_status['status'] == 'partial':
                 connected_missing_count = len(alignment_status['missing_images'])
                 print(f"🔄 Partial alignment detected for {key} - {alignment_status['aligned_images']}/{alignment_status['total_images']} connected images aligned")
                 if connected_missing_count > 0:
                     print(f"   Missing connected images: {alignment_status['missing_images'][:5]}{'...' if len(alignment_status['missing_images']) > 5 else ''}")
                     
-                    # Check if alignment method has changed
-                    if check_alignment_method_change(praw, alignmode, esd_mode):
-                        print(f"🔄 Alignment method changed - offering to backup existing files")
-                        _backup_alignment_files_with_permission(praw, key)
-                        print(f"🔄 Proceeding with full alignment (existing files will be overwritten by GMTSAR)")
-                        _perform_full_alignment(praw, mst, dem, aligncommand, esd_mode, key, lock)
-                    else:
-                        print(f"✅ Alignment method unchanged - performing partial alignment for missing images only")
-                        _perform_partial_alignment(praw, mst, alignment_status['missing_images'], 
-                                                  dem, aligncommand, esd_mode, key, lock)
+                    # BYPASS PARTIAL ALIGNMENT: Always offer backup and do full alignment
+                    print(f"🔄 Offering to backup existing aligned images before full re-alignment")
+                    _backup_alignment_files_with_permission(praw, key, reason="partial_alignment")
+                    print(f"🔄 Proceeding with full alignment (bypassing partial alignment)")
+                    _perform_full_alignment(praw, mst, dem, aligncommand, esd_mode, key, lock)
                 else:
                     print(f"✅ All missing images are unconnected in network - marking as complete")
                     process_logger(process_num=process_num, log_file=paths.get("log_file_path"), message=f"Alignment complete for {key} (all connected images aligned, unconnected skipped)", mode="end")
@@ -137,7 +139,7 @@ def align_sec_imgs(paths, mst, dem, alignmode, esd_mode):
                 # Check for method change and optionally backup if necessary
                 if check_alignment_method_change(praw, alignmode, esd_mode):
                     print(f"🔄 Alignment method changed, offering to backup any existing files...")
-                    _backup_alignment_files_with_permission(praw, key)
+                    _backup_alignment_files_with_permission(praw, key, reason="method_change")
                 
                 _perform_full_alignment(praw, mst, dem, aligncommand, esd_mode, key, lock)
             else:
@@ -147,11 +149,16 @@ def align_sec_imgs(paths, mst, dem, alignmode, esd_mode):
         process_logger(process_num=process_num, log_file=paths.get("log_file_path"), 
                       message=f"Alignment processing completed for {key}", mode="end")
 
-    def _backup_alignment_files_with_permission(praw, key):
-        """🔒 SAFE BACKUP: Only backup alignment files when method changes and user gives explicit permission.
+    def _backup_alignment_files_with_permission(praw, key, reason="partial_alignment"):
+        """🔒 SAFE BACKUP: Backup alignment files with user permission.
         NEVER deletes original files - only creates backup copies.
+        
+        Args:
+            praw: Path to raw directory
+            key: Subswath key (pF1, pF2, pF3)
+            reason: Reason for backup ("method_change" or "partial_alignment")
         """
-        print(f"🔧 [TEST] Starting backup function for {key}")
+        print(f"🔧 Checking for existing alignment files to backup for {key}")
         
         data_in_path = os.path.join(praw, "data.in")
         if not os.path.exists(data_in_path):
@@ -178,6 +185,7 @@ def align_sec_imgs(paths, mst, dem, alignmode, esd_mode):
         alignment_files = list(set(alignment_files))
         
         if not alignment_files:
+            print(f"ℹ️  No existing alignment files found for {key}")
             return False
             
         # Ask user for explicit permission to backup files
@@ -186,15 +194,27 @@ def align_sec_imgs(paths, mst, dem, alignmode, esd_mode):
             temp_root = tk.Tk()
             temp_root.withdraw()  # Hide the main window
             
-            message = (f"Alignment method has changed for {key}.\n\n"
-                      f"Found {len(alignment_files)} existing alignment files.\n\n"
-                      f"Would you like to create a backup copy of these files before re-alignment?\n\n"
-                      f"📋 Files to backup: {', '.join(alignment_files[:5])}"
-                      f"{'...' if len(alignment_files) > 5 else ''}\n\n"
-                      f"⚠️  Note: Original files will be PRESERVED (not deleted).")
+            if reason == "method_change":
+                message = (f"Alignment method has changed for {key}.\n\n"
+                          f"Found {len(alignment_files)} existing alignment files.\n\n"
+                          f"Would you like to create a backup copy before re-alignment?\n\n"
+                          f"📋 Files to backup: {', '.join(alignment_files[:5])}"
+                          f"{'...' if len(alignment_files) > 5 else ''}\n\n"
+                          f"⚠️  Note: Original files will be PRESERVED (not deleted).\n"
+                          f"Re-alignment will overwrite them with new data.")
+                title = "Alignment Method Changed - Backup Files?"
+            else:  # partial_alignment
+                message = (f"Partial alignment detected for {key}.\n\n"
+                          f"Found {len(alignment_files)} existing alignment files.\n\n"
+                          f"Would you like to create a backup copy before full re-alignment?\n\n"
+                          f"📋 Files to backup: {', '.join(alignment_files[:5])}"
+                          f"{'...' if len(alignment_files) > 5 else ''}\n\n"
+                          f"⚠️  Note: Original files will be PRESERVED (not deleted).\n"
+                          f"Full re-alignment will overwrite them with new data.")
+                title = "Partial Alignment Detected - Backup Files?"
             
             user_response = messagebox.askyesno(
-                "Alignment Method Changed - Backup Files?",
+                title,
                 message,
                 parent=temp_root
             )
@@ -212,7 +232,7 @@ def align_sec_imgs(paths, mst, dem, alignmode, esd_mode):
             
         # Create timestamped backup directory
         timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-        backup_dir = os.path.join(praw, f"alignment_method_change_backup_{timestamp}")
+        backup_dir = os.path.join(praw, f"alignment_backup_{timestamp}")
         
         try:
             os.makedirs(backup_dir)
@@ -230,7 +250,7 @@ def align_sec_imgs(paths, mst, dem, alignmode, esd_mode):
             
             if backed_up_count > 0:
                 print(f"✅ Successfully backed up {backed_up_count} alignment files to: {backup_dir}")
-                print(f"🔒 Original files preserved in their original location")
+                print(f"🔒 Original files preserved - they will be overwritten during re-alignment")
                 return True
             else:
                 os.rmdir(backup_dir)  # Remove empty backup directory
@@ -325,80 +345,82 @@ def align_sec_imgs(paths, mst, dem, alignmode, esd_mode):
             else:
                 print(f"⚠️  No connected slave images found for {key}, skipping alignment")
 
-    def _perform_partial_alignment(praw, mst, missing_images, dem, aligncommand, esd_mode, key, lock):
-        """🔒 CRITICAL FIX: Check network connectivity before partial alignment."""
-        print(f"🔧 [TEST] Starting partial alignment for {key}")
-        
-        # First, check which images are actually connected in the network
-        ind = os.path.join(os.path.dirname(praw), "intf.in")
-        connected_missing_images = []
-        
-        if os.path.exists(ind):
-            # Read intf.in to see which images are connected
-            with open(ind, 'r') as f:
-                intf_lines = f.readlines()
-            
-            # Extract connected image dates from intf.in
-            connected_images = set()
-            for intf_line in intf_lines:
-                if ':' in intf_line:
-                    parts = intf_line.strip().split(':')
-                    if len(parts) >= 2:
-                        for part in parts:
-                            date_match = re.search(r'\d{8}', part)
-                            if date_match:
-                                connected_images.add(date_match.group())
-            
-            # Filter missing images to only include connected ones
-            for missing_date in missing_images:
-                if missing_date in connected_images:
-                    connected_missing_images.append(missing_date)
-                else:
-                    print(f"⚠️  Skipping unconnected missing image: {missing_date}")
-        else:
-            print(f"⚠️  No intf.in file found, assuming all missing images are connected")
-            connected_missing_images = missing_images
-        
-        if not connected_missing_images:
-            print(f"✅ All missing images for {key} are unconnected in network - no partial alignment needed")
-            return
-        
-        print(f"🔄 Performing partial alignment for {len(connected_missing_images)} connected missing images: {connected_missing_images}")
-        
-        # Extract master date from master string (assuming format contains date)
-        master_date = None
-        if mst and len(mst) >= 8:
-            # Try to extract date from master string
-            for i in range(len(mst) - 7):
-                potential_date = mst[i:i+8]
-                if potential_date.isdigit():
-                    master_date = potential_date
-                    break
-        
-        if not master_date:
-            print(f"❌ Could not determine master date for partial alignment of {key}")
-            return
-            
-        # Create temporary data.in with master + connected unaligned images only
-        temp_data_in = create_temp_data_in(praw, master_date, connected_missing_images)
-        
-        if temp_data_in:
-            try:
-                with lock:
-                    print(f"🔄 Starting partial alignment for {key} - master + {len(connected_missing_images)} connected missing images...")
-                    print(f'{aligncommand} {os.path.basename(temp_data_in)} {dem} 2 {esd_mode}'.strip())
-                    
-                    # Run alignment with temporary data.in file
-                    subprocess.call(f'{aligncommand} {os.path.basename(temp_data_in)} {dem} 2 {esd_mode}'.strip(), shell=True, cwd=praw)
-                    
-                    print(f"✅ Partial alignment completed for {key}")
-                    
-            finally:
-                # Clean up temporary file
-                if os.path.exists(temp_data_in):
-                    os.remove(temp_data_in)
-        else:
-            print(f"❌ Failed to create temporary data.in for partial alignment of {key}")
+    # COMMENTED OUT: Partial alignment function (no longer used)
+    # def _perform_partial_alignment(praw, mst, missing_images, dem, aligncommand, esd_mode, key, lock):
+    #     """🔒 CRITICAL FIX: Check network connectivity before partial alignment."""
+    #     print(f"🔧 [TEST] Starting partial alignment for {key}")
+    #     
+    #     # First, check which images are actually connected in the network
+    #     ind = os.path.join(os.path.dirname(praw), "intf.in")
+    #     connected_missing_images = []
+    #     
+    #     if os.path.exists(ind):
+    #         # Read intf.in to see which images are connected
+    #         with open(ind, 'r') as f:
+    #             intf_lines = f.readlines()
+    #         
+    #         # Extract connected image dates from intf.in
+    #         connected_images = set()
+    #         for intf_line in intf_lines:
+    #             if ':' in intf_line:
+    #                 parts = intf_line.strip().split(':')
+    #                 if len(parts) >= 2:
+    #                     for part in parts:
+    #                         date_match = re.search(r'\d{8}', part)
+    #                         if date_match:
+    #                             connected_images.add(date_match.group())
+    #         
+    #         # Filter missing images to only include connected ones
+    #         for missing_date in missing_images:
+    #             if missing_date in connected_images:
+    #                 connected_missing_images.append(missing_date)
+    #             else:
+    #                 print(f"⚠️  Skipping unconnected missing image: {missing_date}")
+    #     else:
+    #         print(f"⚠️  No intf.in file found, assuming all missing images are connected")
+    #         connected_missing_images = missing_images
+    #     
+    #     if not connected_missing_images:
+    #         print(f"✅ All missing images for {key} are unconnected in network - no partial alignment needed")
+    #         return
+    #     
+    #     print(f"🔄 Performing partial alignment for {len(connected_missing_images)} connected missing images: {connected_missing_images}")
+    #     
+    #     # Extract master date from master string (assuming format contains date)
+    #     master_date = None
+    #     mst_f = mst.replace('-', '')
+    #     if mst_f and len(mst_f) >= 8:
+    #         # Try to extract date from master string
+    #         for i in range(len(mst_f) - 7):
+    #             potential_date = mst_f[i:i+8]
+    #             if potential_date.isdigit():
+    #                 master_date = potential_date
+    #                 break
+    #     
+    #     if not master_date:
+    #         print(f"❌ Could not determine master date for partial alignment of {key}")
+    #         return
+    #         
+    #     # Create temporary data.in with master + connected unaligned images only
+    #     temp_data_in = create_temp_data_in(praw, master_date, connected_missing_images)
+    #     
+    #     if temp_data_in:
+    #         try:
+    #             with lock:
+    #                 print(f"🔄 Starting partial alignment for {key} - master + {len(connected_missing_images)} connected missing images...")
+    #                 print(f'{aligncommand} {os.path.basename(temp_data_in)} {dem} 2 {esd_mode}'.strip())
+    #                 
+    #                 # Run alignment with temporary data.in file
+    #                 subprocess.call(f'{aligncommand} {os.path.basename(temp_data_in)} {dem} 2 {esd_mode}'.strip(), shell=True, cwd=praw)
+    #                 
+    #                 print(f"✅ Partial alignment completed for {key}")
+    #                 
+    #         finally:
+    #             # Clean up temporary file
+    #             if os.path.exists(temp_data_in):
+    #                 os.remove(temp_data_in)
+    #     else:
+    #         print(f"❌ Failed to create temporary data.in for partial alignment of {key}")
 
     # Only process valid existing subswaths
     with ThreadPoolExecutor() as executor:

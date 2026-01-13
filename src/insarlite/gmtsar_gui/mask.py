@@ -485,6 +485,23 @@ class GrdViewer(tk.Toplevel):
             subprocess.run(["gmt", "grdconvert", tmp_nc, f"{grd_out}=nf"], check=True)
             os.remove(tmp_nc)
             print(f"✓ GMT .grd file saved: {grd_out}")
+            
+            # Generate pdf and ps files using GMT
+            base_name = grd_out.replace(".grd", "")
+            pdf_out = f"{base_name}.pdf"
+            ps_out = f"{base_name}.ps"
+            
+            try:
+                # Create ps file using gmt grdimage
+                subprocess.run(["gmt", "grdimage", grd_out, "-JX6i", "-P", "-Baf", f"-C{base_name}.cpt"], 
+                             stdout=open(ps_out, 'w'), check=True)
+                # Convert ps to pdf
+                subprocess.run(["gmt", "psconvert", ps_out, "-Tf", "-A"], check=True)
+                print(f"✓ Additional files saved: {pdf_out}, {ps_out}")
+            except subprocess.CalledProcessError as e:
+                print(f"Warning: Could not generate pdf/ps files: {e}")
+            except FileNotFoundError:
+                print("Warning: GMT commands not available for pdf/ps generation")
         except subprocess.CalledProcessError as e:
             print(f"Warning: GMT conversion failed: {e}")
             print(f"Falling back to NetCDF format...")
