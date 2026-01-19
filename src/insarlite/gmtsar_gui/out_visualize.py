@@ -11,9 +11,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import matplotlib.dates as mdates
-import cartopy.crs as ccrs
-import cartopy.feature as cfeature
-from dask.diagnostics import ProgressBar
 import tkinter as tk
 from tkinter import messagebox, filedialog
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
@@ -558,8 +555,8 @@ class VisualizeApp(tk.Tk):
         samp.close()
         chunk_dict = {lat_name: 256, lon_name: 256}
 
-        with ProgressBar():
-            self.stacked_data = load_all_data_lazy(files_to_load, chunk_dict=chunk_dict)
+        # Load data without ProgressBar to avoid tkinter conflicts
+        self.stacked_data = load_all_data_lazy(files_to_load, chunk_dict=chunk_dict)
 
         vel_file_path = os.path.join(folder_path, "vel_ll.grd")
         if not os.path.exists(vel_file_path):
@@ -663,13 +660,14 @@ class VisualizeApp(tk.Tk):
             if hasattr(self, 'map_canvas') and self.map_canvas:
                 try:
                     ax_current = self.map_canvas.figure.axes[0]
-                    current_extent = ax_current.get_extent()  # [lon_min, lon_max, lat_min, lat_max]
+                    current_xlim = ax_current.get_xlim()
+                    current_ylim = ax_current.get_ylim()
                     
                     # Calculate center and size
-                    center_lon = (current_extent[0] + current_extent[1]) / 2
-                    center_lat = (current_extent[2] + current_extent[3]) / 2
-                    width = (current_extent[1] - current_extent[0]) * zoom_factor
-                    height = (current_extent[3] - current_extent[2]) * zoom_factor
+                    center_lon = (current_xlim[0] + current_xlim[1]) / 2
+                    center_lat = (current_ylim[0] + current_ylim[1]) / 2
+                    width = (current_xlim[1] - current_xlim[0]) * zoom_factor
+                    height = (current_ylim[1] - current_ylim[0]) * zoom_factor
                     
                     # Calculate new extent
                     lon_min = max(lons.min(), center_lon - width / 2)
@@ -692,21 +690,19 @@ class VisualizeApp(tk.Tk):
                 lon_min, lon_max = lons.min(), lons.max()
                 lat_min, lat_max = lats.min(), lats.max()
             
-            # Create clean map figure
+            # Create clean map figure with basic matplotlib
             clean_fig = plt.Figure(figsize=(8, 6))
-            clean_ax = clean_fig.add_subplot(111, projection=ccrs.PlateCarree())
-            clean_ax.set_extent([lon_min, lon_max, lat_min, lat_max], crs=ccrs.PlateCarree())
-            
-            # Add gridlines
-            gl = clean_ax.gridlines(draw_labels=True, linewidth=0.5, color='gray', alpha=0.5, linestyle='--')
-            gl.top_labels = False
-            gl.right_labels = False
-            gl.xlabel_style = {'size': 10}
-            gl.ylabel_style = {'size': 10}
+            clean_ax = clean_fig.add_subplot(111)
+            clean_ax.set_xlim(lon_min, lon_max)
+            clean_ax.set_ylim(lat_min, lat_max)
             
             # Plot velocity map
-            c = clean_ax.pcolormesh(lon2d, lat2d, vel, cmap='jet', transform=ccrs.PlateCarree())
+            c = clean_ax.pcolormesh(lon2d, lat2d, vel, cmap='jet')
             clean_fig.colorbar(c, ax=clean_ax, orientation='vertical')
+            clean_ax.set_xlabel('Longitude')
+            clean_ax.set_ylabel('Latitude')
+            clean_ax.grid(True, alpha=0.3, linestyle='--')
+            clean_ax.set_aspect('equal', adjustable='box')
             
             # Add pin at specified location
             clean_ax.plot(lon, lat, '+', markersize=15, 
@@ -1268,27 +1264,18 @@ class VisualizeApp(tk.Tk):
         lon2d, lat2d = np.meshgrid(lons, lats)
         vel = ds.values
 
-        # Create figure
+        # Create figure with basic matplotlib (no cartopy)
         fig = plt.Figure(figsize=(8, 6))
-        ax = fig.add_subplot(111, projection=ccrs.PlateCarree())
-        ax.set_extent([lons.min(), lons.max(), lats.min(), lats.max()], crs=ccrs.PlateCarree())
-        # ax.add_feature(cfeature.COASTLINE)
-        # ax.add_feature(cfeature.BORDERS, linestyle=':')
-        # ax.add_feature(cfeature.LAND, facecolor='lightgray', edgecolor='none')
-        # ax.add_feature(cfeature.LAKES, alpha=0.5)
-        # ax.add_feature(cfeature.RIVERS, alpha=0.5)
-
-        # Add gridlines for lat/lon
-        gl = ax.gridlines(draw_labels=True, linewidth=0.5, color='gray', alpha=0.5, linestyle='--')
-        gl.top_labels = False
-        gl.right_labels = False
-        gl.xlabel_style = {'size': 10}
-        gl.ylabel_style = {'size': 10}
-
+        ax = fig.add_subplot(111)
+        
         # Plot velocity map
-        c = ax.pcolormesh(lon2d, lat2d, vel, cmap='jet', transform=ccrs.PlateCarree())
+        c = ax.pcolormesh(lon2d, lat2d, vel, cmap='jet')
         fig.colorbar(c, ax=ax, orientation='vertical')
+        ax.set_xlabel('Longitude')
+        ax.set_ylabel('Latitude')
         ax.set_title("Interactive Map of Surface Deformation Velocity")
+        ax.grid(True, alpha=0.3, linestyle='--')
+        ax.set_aspect('equal', adjustable='box')
 
         # Destroy old canvas if exists
         if self.map_canvas:
